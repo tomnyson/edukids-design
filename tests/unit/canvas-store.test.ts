@@ -82,4 +82,63 @@ describe('Design State Store', () => {
     expect(updated.document.children).toHaveLength(1);
     expect(updated.document.children[0].id).toBe(id2);
   });
+
+  it('should manage context attachments', () => {
+    const store = useDesignStore.getState();
+    store.addContextAttachment({
+      id: 'att-1',
+      type: 'style',
+      name: 'Style: Neon Glass',
+    });
+    store.addContextAttachment({
+      id: 'att-2',
+      type: 'skill',
+      name: 'Skill: WCAG AA',
+    });
+
+    let state = useDesignStore.getState();
+    expect(state.contextAttachments).toHaveLength(2);
+    expect(state.contextAttachments[0].name).toBe('Style: Neon Glass');
+
+    store.removeContextAttachment('att-1');
+    state = useDesignStore.getState();
+    expect(state.contextAttachments).toHaveLength(1);
+    expect(state.contextAttachments[0].id).toBe('att-2');
+
+    store.clearContextAttachments();
+    state = useDesignStore.getState();
+    expect(state.contextAttachments).toHaveLength(0);
+  });
+
+  it('should configure parallel agents and scale variant generation', () => {
+    const store = useDesignStore.getState();
+    
+    // Set to 3x parallel side-by-side
+    store.setParallelConfig(3, 'side-by-side');
+    expect(useDesignStore.getState().parallelAgentsCount).toBe(3);
+    expect(useDesignStore.getState().parallelMode).toBe('side-by-side');
+
+    store.generateWebVariants('SaaS Landing Page');
+    let state = useDesignStore.getState();
+    expect(state.document.children).toHaveLength(3);
+    expect(state.document.children[0].name).toContain('1. Neon Glass');
+
+    // Set to 4x parallel split work
+    store.setParallelConfig(4, 'split');
+    store.generateWebVariants('E-commerce');
+    state = useDesignStore.getState();
+    expect(state.document.children).toHaveLength(4);
+    expect(state.document.children[0].name).toBe('1. Hero & Navigation');
+    expect(state.document.children[1].name).toBe('2. Product Catalog');
+  });
+
+  it('should configure reasoning effort and selected model', () => {
+    const store = useDesignStore.getState();
+
+    store.setReasoningEffort('very_high');
+    expect(useDesignStore.getState().reasoningEffort).toBe('very_high');
+
+    store.setSelectedModel('pen.dev Pro - DeepSeek V4.1 Flash');
+    expect(useDesignStore.getState().selectedModel).toBe('pen.dev Pro - DeepSeek V4.1 Flash');
+  });
 });

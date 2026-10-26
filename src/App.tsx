@@ -103,6 +103,7 @@ export default function App() {
               onOpenCodeModal={() => setIsCodeModalOpen(true)}
               onSendPrompt={handleSendPrompt}
               isGenerating={isGenerating}
+              onOpenBrowserImport={handleImportWeb}
             />
           </aside>
         )}

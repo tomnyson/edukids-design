@@ -8,12 +8,14 @@ interface LeftSidebarContainerProps {
   onOpenCodeModal: () => void;
   onSendPrompt: (prompt: string, model: string) => void;
   isGenerating?: boolean;
+  onOpenBrowserImport?: () => void;
 }
 
 export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
   onOpenCodeModal,
   onSendPrompt,
   isGenerating,
+  onOpenBrowserImport,
 }) => {
   const [activeTab, setActiveTab] = useState<SidebarTab>('agent');
   const { document: doc, selectNode, selectedNodeIds } = useDesignStore();
@@ -33,6 +35,7 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
           onSelectTab={handleTabChange}
           onSendPrompt={onSendPrompt}
           isGenerating={isGenerating}
+          onOpenBrowserImport={onOpenBrowserImport}
         />
       )}
 

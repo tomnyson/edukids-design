@@ -17,6 +17,7 @@ interface AgentChatPanelProps {
   onSelectTab: (tab: SidebarTab) => void;
   onSendPrompt: (prompt: string, model: string) => void;
   isGenerating?: boolean;
+  onOpenBrowserImport?: () => void;
 }
 
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
@@ -24,6 +25,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onSelectTab,
   onSendPrompt,
   isGenerating = false,
+  onOpenBrowserImport,
 }) => {
   const suggestions = [
     'Warm minimal booking site for a Lisbon ceramic studio',
@@ -158,7 +160,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
 
       {/* Bottom Chat Bar Container */}
       <div className="p-3 bg-[#0d0e15] border-t border-[#1c1d29]">
-        <ChatInputBox onSend={onSendPrompt} isLoading={isGenerating} />
+        <ChatInputBox
+          onSend={onSendPrompt}
+          isLoading={isGenerating}
+          onOpenBrowserImport={onOpenBrowserImport}
+        />
       </div>
     </div>
   );

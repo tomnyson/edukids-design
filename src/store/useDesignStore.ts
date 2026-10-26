@@ -3,6 +3,15 @@ import { PenDocument, PenNode, FrameNode } from '../types/pen-ast';
 import { generateNodeId, findNodeById, updateNodeInTree } from '../core/io/pen-file-handler';
 
 export type ToolType = 'select' | 'frame' | 'rect' | 'text';
+export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'very_high';
+
+export interface ContextAttachment {
+  id: string;
+  type: 'image' | 'file' | 'style' | 'skill';
+  name: string;
+  previewUrl?: string;
+  content?: string;
+}
 
 interface HistorySnapshot {
   document: PenDocument;
@@ -21,6 +30,21 @@ interface DesignState {
     zoom: number;
   };
   activeTool: ToolType;
+
+  // Context Attachments & Parallel AI Engine
+  contextAttachments: ContextAttachment[];
+  parallelAgentsCount: number;
+  parallelMode: 'split' | 'side-by-side';
+  reasoningEffort: ReasoningEffort;
+  selectedModel: string;
+
+  // Context & Parallel Actions
+  addContextAttachment: (attachment: ContextAttachment) => void;
+  removeContextAttachment: (id: string) => void;
+  clearContextAttachments: () => void;
+  setParallelConfig: (count: number, mode?: 'split' | 'side-by-side') => void;
+  setReasoningEffort: (effort: ReasoningEffort) => void;
+  setSelectedModel: (model: string) => void;
 
   // History stack for undo/redo
   history: HistorySnapshot[];
@@ -56,9 +80,13 @@ interface DesignState {
   redo: () => void;
 }
 
-// Generate the 6 Landing Page Artboards from the screenshot
-function createMultiVariantArtboards(): PenNode[] {
-  const variantTitles = [
+// Generate the Landing Page Artboards
+function createMultiVariantArtboards(
+  count: number = 6,
+  topic: string = 'In Ấn & Thiết Kế Thương Hiệu',
+  mode: 'split' | 'side-by-side' = 'side-by-side'
+): PenNode[] {
+  const allVariantTitles = [
     '1. Neon Glass',
     '2. Variant B — Blue x Modern',
     '3. Variant C — Thanh Hải Pro',
@@ -67,6 +95,17 @@ function createMultiVariantArtboards(): PenNode[] {
     '6. Variant F — Modern Cyan',
   ];
 
+  const splitTitles = [
+    '1. Hero & Navigation',
+    '2. Product Catalog',
+    '3. Workflow & Video',
+    '4. Testimonials & Social',
+    '5. Pricing & CTA',
+    '6. Footer & Legal',
+  ];
+
+  const titles = (mode === 'split' ? splitTitles : allVariantTitles).slice(0, Math.max(1, count));
+
   const artboards: PenNode[] = [];
   const startX = 350;
   const startY = 80;
@@ -74,9 +113,20 @@ function createMultiVariantArtboards(): PenNode[] {
   const artboardHeight = 1100;
   const spacing = 40;
 
-  variantTitles.forEach((title, idx) => {
+  titles.forEach((title, idx) => {
     const isDark = idx % 2 === 0;
-    const accentColor = idx === 0 ? '#38bdf8' : idx === 1 ? '#3b82f6' : idx === 2 ? '#6366f1' : '#06b6d4';
+    const accentColor =
+      idx === 0
+        ? '#38bdf8'
+        : idx === 1
+        ? '#3b82f6'
+        : idx === 2
+        ? '#6366f1'
+        : idx === 3
+        ? '#8b5cf6'
+        : idx === 4
+        ? '#ec4899'
+        : '#06b6d4';
 
     const frame: FrameNode = {
       id: `variant-frame-${idx + 1}`,
@@ -116,7 +166,7 @@ function createMultiVariantArtboards(): PenNode[] {
               id: `logo-${idx}`,
               type: 'text',
               name: 'Brand Logo',
-              content: 'THANH HẢI',
+              content: topic.toUpperCase().slice(0, 15) || 'THANH HẢI',
               fontSize: 10,
               fontWeight: '700',
               fill: accentColor,
@@ -178,7 +228,7 @@ function createMultiVariantArtboards(): PenNode[] {
               id: `h-title-${idx}`,
               type: 'text',
               name: 'Heading',
-              content: 'IN ĐẸP DẤU GIÀY',
+              content: topic.slice(0, 24).toUpperCase() || 'IN ĐẸP DẤU GIÀY',
               fontSize: 14,
               fontWeight: '700',
               fill: '#ffffff',
@@ -367,6 +417,50 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   history: [{ document: JSON.parse(JSON.stringify(DEFAULT_PEN_DOC)) }],
   historyIndex: 0,
 
+  // Context Attachments & Parallel AI Engine State
+  contextAttachments: [],
+  parallelAgentsCount: 1,
+  parallelMode: 'side-by-side',
+  reasoningEffort: 'medium',
+  selectedModel: 'Claude Opus 5.5',
+
+  addContextAttachment: (attachment) => {
+    set((state) => ({
+      contextAttachments: [
+        ...state.contextAttachments.filter((a) => a.id !== attachment.id),
+        attachment,
+      ],
+      toastMessage: `📎 Đã gắn context: "${attachment.name}"`,
+    }));
+    setTimeout(() => {
+      if (get().toastMessage?.includes('context')) {
+        set({ toastMessage: null });
+      }
+    }, 3000);
+  },
+
+  removeContextAttachment: (id) =>
+    set((state) => ({
+      contextAttachments: state.contextAttachments.filter((a) => a.id !== id),
+    })),
+
+  clearContextAttachments: () => set({ contextAttachments: [] }),
+
+  setParallelConfig: (count, mode) =>
+    set((state) => ({
+      parallelAgentsCount: count,
+      parallelMode: mode || state.parallelMode,
+      toastMessage: `⚡ Đã chọn ${count}x Parallel Agents (${(mode || state.parallelMode) === 'split' ? 'Split Work' : 'Side by Side'})`,
+    })),
+
+  setReasoningEffort: (effort) =>
+    set({
+      reasoningEffort: effort,
+      toastMessage: `🧠 Reasoning Effort: ${effort.toUpperCase()}`,
+    }),
+
+  setSelectedModel: (model) => set({ selectedModel: model }),
+
   // Autonomous Advisor Co-pilot default state
   isAutoAdvisorEnabled: true,
   isAutonomousModeEnabled: true,
@@ -533,7 +627,9 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   },
 
   generateWebVariants: (topic: string) => {
-    const newArtboards = createMultiVariantArtboards();
+    const { parallelAgentsCount, parallelMode } = get();
+    const count = Math.max(1, Math.min(6, parallelAgentsCount || 1));
+    const newArtboards = createMultiVariantArtboards(count, topic, parallelMode);
     const newDoc = { ...get().document, children: newArtboards };
     set(pushHistory(get(), newDoc));
   },
