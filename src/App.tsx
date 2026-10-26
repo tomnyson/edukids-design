@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WindowChrome } from './components/layout/WindowChrome';
 import { LeftSidebarContainer } from './components/layout/LeftSidebarContainer';
 import { FloatingToolDock } from './components/toolbar/FloatingToolDock';
@@ -19,8 +19,29 @@ export default function App() {
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const { generateWebVariants, addNode, document: doc, toastMessage, setToastMessage, undo } = useDesignStore();
+  const {
+    generateWebVariants,
+    addNode,
+    document: doc,
+    documentName,
+    createNewDocument,
+    toastMessage,
+    setToastMessage,
+    undo,
+  } = useDesignStore();
   const advisor = new ClaudeOpusAdvisor();
+
+  // Keyboard shortcut: Cmd+N / Ctrl+N to create new blank document
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        createNewDocument();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [createNewDocument]);
 
   const handleSendPrompt = async (prompt: string, model: string) => {
     setIsGenerating(true);
@@ -70,6 +91,8 @@ export default function App() {
         onImportWeb={handleImportWeb}
         onShare={() => alert('Share Link copied to clipboard!')}
         onConnectAgents={() => setIsConnectModalOpen(true)}
+        onNewDocument={createNewDocument}
+        documentName={documentName}
       />
 
       {/* Autonomous Co-Pilot Toast Notification */}
@@ -104,6 +127,7 @@ export default function App() {
               onSendPrompt={handleSendPrompt}
               isGenerating={isGenerating}
               onOpenBrowserImport={handleImportWeb}
+              onNewDocument={createNewDocument}
             />
           </aside>
         )}

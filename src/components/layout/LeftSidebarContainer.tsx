@@ -9,6 +9,7 @@ interface LeftSidebarContainerProps {
   onSendPrompt: (prompt: string, model: string) => void;
   isGenerating?: boolean;
   onOpenBrowserImport?: () => void;
+  onNewDocument?: () => void;
 }
 
 export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
@@ -16,6 +17,7 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
   onSendPrompt,
   isGenerating,
   onOpenBrowserImport,
+  onNewDocument,
 }) => {
   const [activeTab, setActiveTab] = useState<SidebarTab>('agent');
   const { document: doc, selectNode, selectedNodeIds } = useDesignStore();
@@ -36,6 +38,7 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
           onSendPrompt={onSendPrompt}
           isGenerating={isGenerating}
           onOpenBrowserImport={onOpenBrowserImport}
+          onNewDocument={onNewDocument}
         />
       )}
 
@@ -104,24 +107,34 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
           </div>
 
           <div className="p-3 space-y-2 overflow-y-auto flex-1">
-            {doc.children.map((child, i) => (
-              <div
-                key={child.id}
-                onClick={() => selectNode(child.id)}
-                className={`p-2.5 rounded-xl border cursor-pointer transition ${
-                  selectedNodeIds.includes(child.id)
-                    ? 'bg-[#1b1e2e] border-sky-500/50 text-white font-medium'
-                    : 'bg-[#141520] border-[#222434] text-zinc-400 hover:text-zinc-200'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs truncate">{child.name || `Screen ${i + 1}`}</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">
-                    {child.width}x{child.height}
-                  </span>
-                </div>
+            {doc.children.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-48 text-center text-zinc-500 text-xs p-4">
+                <Monitor className="h-8 w-8 mb-2 text-zinc-600 stroke-[1.5]" />
+                <p className="font-medium text-zinc-400">Tài liệu trống</p>
+                <p className="text-[11px] text-zinc-600 mt-1">
+                  Chưa có frame nào. Dùng công cụ Frame (F) hoặc yêu cầu Agent để tạo.
+                </p>
               </div>
-            ))}
+            ) : (
+              doc.children.map((child, i) => (
+                <div
+                  key={child.id}
+                  onClick={() => selectNode(child.id)}
+                  className={`p-2.5 rounded-xl border cursor-pointer transition ${
+                    selectedNodeIds.includes(child.id)
+                      ? 'bg-[#1b1e2e] border-sky-500/50 text-white font-medium'
+                      : 'bg-[#141520] border-[#222434] text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs truncate">{child.name || `Screen ${i + 1}`}</span>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      {child.width}x{child.height}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       )}

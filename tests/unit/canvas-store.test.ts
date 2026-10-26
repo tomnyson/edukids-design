@@ -141,4 +141,28 @@ describe('Design State Store', () => {
     store.setSelectedModel('pen.dev Pro - DeepSeek V4.1 Flash');
     expect(useDesignStore.getState().selectedModel).toBe('pen.dev Pro - DeepSeek V4.1 Flash');
   });
+
+  it('should create a new completely blank document with 0 frames', () => {
+    const store = useDesignStore.getState();
+
+    // Populate with some nodes first
+    store.addNode({ type: 'frame', name: 'Old Frame' });
+    store.addNode({ type: 'rect', name: 'Old Rect' });
+    store.addContextAttachment({ id: 'att-1', type: 'file', name: 'test.md' });
+    expect(useDesignStore.getState().document.children).toHaveLength(2);
+    expect(useDesignStore.getState().contextAttachments).toHaveLength(1);
+
+    // Trigger createNewDocument
+    store.createNewDocument();
+
+    const state = useDesignStore.getState();
+    // Canvas must be completely blank, no frames created
+    expect(state.document.children).toHaveLength(0);
+    expect(state.selectedNodeIds).toHaveLength(0);
+    expect(state.contextAttachments).toHaveLength(0);
+    expect(state.documentName).toBe('untitled.pen');
+    expect(state.history).toHaveLength(1);
+    expect(state.historyIndex).toBe(0);
+    expect(state.toastMessage).toContain('Canvas trống');
+  });
 });

@@ -178,6 +178,21 @@ export const InfiniteCanvas: React.FC = () => {
         ))}
       </div>
 
+      {/* Blank Canvas Empty State Helper (pointer-events-none) */}
+      {doc.children.length === 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none select-none">
+          <div className="flex flex-col items-center gap-2 p-6 rounded-2xl bg-[#141520]/70 border border-[#232538] backdrop-blur-xs text-center max-w-xs animate-in fade-in zoom-in-95 duration-200">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500/20 to-amber-600/20 border border-orange-500/30 flex items-center justify-center text-orange-400 font-bold text-xs">
+              P
+            </div>
+            <p className="text-xs font-medium text-zinc-200">Canvas trống</p>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Nhập ý tưởng vào khung chat bên trái để AI tạo layout hoặc chọn công cụ Frame (F) để tự vẽ.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Floating Canvas Quick Controls (Zoom: -, 9%, +) matching pen.dev bottom-right */}
       <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-[#161722]/90 backdrop-blur-md border border-[#27293b] rounded-full px-3 py-1.5 text-xs text-zinc-300 font-mono shadow-2xl select-none z-20">
         <button

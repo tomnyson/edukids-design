@@ -18,6 +18,7 @@ interface AgentChatPanelProps {
   onSendPrompt: (prompt: string, model: string) => void;
   isGenerating?: boolean;
   onOpenBrowserImport?: () => void;
+  onNewDocument?: () => void;
 }
 
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
@@ -26,6 +27,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onSendPrompt,
   isGenerating = false,
   onOpenBrowserImport,
+  onNewDocument,
 }) => {
   const suggestions = [
     'Warm minimal booking site for a Lisbon ceramic studio',
@@ -108,7 +110,11 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           <ChevronDown className="h-3 w-3 text-zinc-500" />
         </button>
 
-        <button className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded hover:bg-[#1a1b26] transition font-medium">
+        <button
+          onClick={onNewDocument}
+          className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded hover:bg-[#1a1b26] transition font-medium cursor-pointer"
+          title="Create New Blank Document (Cmd+N)"
+        >
           <Plus className="h-3.5 w-3.5 text-zinc-500" />
           <span>New</span>
         </button>

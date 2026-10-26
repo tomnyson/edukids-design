@@ -13,6 +13,8 @@ interface WindowChromeProps {
   onImportWeb: () => void;
   onShare: () => void;
   onConnectAgents?: () => void;
+  onNewDocument?: () => void;
+  documentName?: string;
 }
 
 export const WindowChrome: React.FC<WindowChromeProps> = ({
@@ -20,6 +22,8 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
   onImportWeb,
   onShare,
   onConnectAgents,
+  onNewDocument,
+  documentName = 'untitled.pen',
 }) => {
   return (
     <header className="flex h-11 w-full items-center justify-between border-b border-[#232533] bg-[#0c0d12] px-3.5 select-none z-30">
@@ -44,11 +48,12 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
         <div className="flex items-center gap-1">
           <div className="flex items-center gap-2 bg-[#1b1c26] text-zinc-200 px-3 py-1 rounded-md text-xs border border-[#2b2d3d] shadow-sm">
             <FileText className="h-3.5 w-3.5 text-zinc-400" />
-            <span className="font-mono text-[11px]">untitled.pen</span>
+            <span className="font-mono text-[11px]">{documentName}</span>
           </div>
           <button
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-[#1b1c26] transition"
-            title="New Document"
+            onClick={onNewDocument}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-[#1b1c26] transition cursor-pointer"
+            title="New Blank Document (Cmd+N)"
           >
             <Plus className="h-3.5 w-3.5" />
           </button>

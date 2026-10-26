@@ -19,6 +19,7 @@ interface HistorySnapshot {
 
 interface DesignState {
   // Document state
+  documentName: string;
   document: PenDocument;
   selectedNodeIds: string[];
   hoveredNodeId: string | null;
@@ -51,7 +52,9 @@ interface DesignState {
   historyIndex: number;
 
   // Actions
-  loadDocument: (doc: PenDocument) => void;
+  createNewDocument: () => void;
+  setDocumentName: (name: string) => void;
+  loadDocument: (doc: PenDocument, name?: string) => void;
   selectNode: (id: string | null, multi?: boolean) => void;
   hoverNode: (id: string | null) => void;
   setViewport: (x: number, y: number, zoom?: number) => void;
@@ -380,9 +383,9 @@ function createMultiVariantArtboards(
   return artboards;
 }
 
-const DEFAULT_PEN_DOC: PenDocument = {
+export const BLANK_PEN_DOC: PenDocument = {
   version: '2.13',
-  children: createMultiVariantArtboards(),
+  children: [], // Completely blank canvas - no pre-generated frames
   themes: {
     Mode: ['Light', 'Dark'],
   },
@@ -398,6 +401,8 @@ const DEFAULT_PEN_DOC: PenDocument = {
   },
 };
 
+const DEFAULT_PEN_DOC: PenDocument = BLANK_PEN_DOC;
+
 function pushHistory(state: DesignState, newDoc: PenDocument) {
   const newHistory = state.history.slice(0, state.historyIndex + 1);
   newHistory.push({ document: JSON.parse(JSON.stringify(newDoc)) });
@@ -409,12 +414,13 @@ function pushHistory(state: DesignState, newDoc: PenDocument) {
 }
 
 export const useDesignStore = create<DesignState>((set, get) => ({
-  document: DEFAULT_PEN_DOC,
-  selectedNodeIds: ['variant-frame-1'],
+  documentName: 'untitled.pen',
+  document: BLANK_PEN_DOC,
+  selectedNodeIds: [],
   hoveredNodeId: null,
-  viewport: { x: 30, y: 30, zoom: 0.55 },
+  viewport: { x: 40, y: 40, zoom: 1 },
   activeTool: 'select',
-  history: [{ document: JSON.parse(JSON.stringify(DEFAULT_PEN_DOC)) }],
+  history: [{ document: JSON.parse(JSON.stringify(BLANK_PEN_DOC)) }],
   historyIndex: 0,
 
   // Context Attachments & Parallel AI Engine State
@@ -509,13 +515,43 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     return patches.length;
   },
 
-  loadDocument: (doc) => {
+  setDocumentName: (name: string) => set({ documentName: name }),
+
+  createNewDocument: () => {
+    const blank = JSON.parse(JSON.stringify(BLANK_PEN_DOC));
     set({
+      documentName: 'untitled.pen',
+      document: blank,
+      selectedNodeIds: [],
+      hoveredNodeId: null,
+      contextAttachments: [],
+      viewport: { x: 40, y: 40, zoom: 1 },
+      history: [{ document: blank }],
+      historyIndex: 0,
+      toastMessage: '✨ Đã tạo tài liệu mới (Canvas trống, không có frame).',
+    });
+    setTimeout(() => {
+      if (get().toastMessage?.includes('tài liệu mới')) {
+        set({ toastMessage: null });
+      }
+    }, 2500);
+  },
+
+  loadDocument: (doc, name) => {
+    set({
+      documentName: name || 'untitled.pen',
       document: doc,
       selectedNodeIds: [],
+      hoveredNodeId: null,
       history: [{ document: JSON.parse(JSON.stringify(doc)) }],
       historyIndex: 0,
+      toastMessage: `📂 Đã mở tài liệu ${name || 'untitled.pen'}`,
     });
+    setTimeout(() => {
+      if (get().toastMessage?.includes('Đã mở')) {
+        set({ toastMessage: null });
+      }
+    }, 2500);
   },
 
   selectNode: (id, multi = false) => {
