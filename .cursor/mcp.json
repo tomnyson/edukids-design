@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "pen-studio": {
+      "command": "node",
+      "args": [
+        "/Applications/work/web-creator-ai/bin/pen-mcp.js"
+      ]
+    }
+  }
+}
