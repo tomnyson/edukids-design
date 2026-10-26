@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "mcp:server": "node --loader ts-node/esm src/mcp/server.ts"
+    "mcp:server": "node --loader ts-node/esm src/mcp/server.ts",
+    "mcp:setup": "node scripts/setup-mcp-agents.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",

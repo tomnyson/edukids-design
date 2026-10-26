@@ -1,82 +1,44 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { AdvisorConsultationOptions, AdvisorCritique } from './providers/types';
+import { OpenAiProvider } from './providers/OpenAiProvider';
+import { AnthropicProvider } from './providers/AnthropicProvider';
 import { PenDocument, PenNode, FrameNode, TextNode } from '../types/pen-ast';
-import { ADVISOR_SYSTEM_PROMPT, buildAdvisorConsultationPrompt } from './prompts/consultant-prompt';
 
-export interface AdvisorCritique {
-  id: string;
-  category: 'architecture' | 'ux_heuristic' | 'accessibility' | 'design_system';
-  severity: 'info' | 'warning' | 'critical';
-  title: string;
-  observation: string;
-  recommendation: string;
-  suggestedPatch?: {
-    nodeId: string;
-    patch: Partial<PenNode>;
-  };
-}
-
-export interface AdvisorConsultationOptions {
-  apiKey?: string;
-  model?: string;
-  document: PenDocument;
-  selectedNode?: PenNode | null;
-  query: string;
-}
+export { type AdvisorCritique, type AdvisorConsultationOptions };
 
 export class ClaudeOpusAdvisor {
-  private defaultModel = 'claude-3-opus-20240229';
+  private openAiProvider = new OpenAiProvider();
+  private anthropicProvider = new AnthropicProvider();
 
   public async consult(options: AdvisorConsultationOptions): Promise<AdvisorCritique[]> {
-    const { apiKey, model = this.defaultModel, document, selectedNode, query } = options;
+    const { model = 'claude-3-opus-20240229', anthropicApiKey, openAiApiKey } = options;
+    const isGptModel =
+      model.toLowerCase().includes('gpt') ||
+      model.toLowerCase().includes('o1') ||
+      model.toLowerCase().includes('o3');
 
-    // If an API key is provided, perform live call to Anthropic Claude Opus API
-    if (apiKey && apiKey.trim().startsWith('sk-ant-')) {
+    // 1. Try OpenAI if it's a GPT model and key is present
+    if (isGptModel && openAiApiKey && openAiApiKey.trim()) {
       try {
-        const client = new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-        const docSummary = {
-          version: document.version,
-          nodeCount: document.children.length,
-          themes: document.themes,
-        };
-
-        const prompt = buildAdvisorConsultationPrompt(docSummary, selectedNode, query);
-
-        const response = await client.messages.create({
-          model,
-          max_tokens: 2048,
-          system: ADVISOR_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: prompt }],
-        });
-
-        const rawContent = response.content[0];
-        if (rawContent && rawContent.type === 'text') {
-          // Parse JSON from text response
-          const jsonMatch = rawContent.text.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            if (Array.isArray(parsed.critiques)) {
-              return parsed.critiques.map((c: any, index: number) => ({
-                id: `opus-${Date.now()}-${index}`,
-                category: c.category || 'ux_heuristic',
-                severity: c.severity || 'info',
-                title: c.title || 'Advisor Recommendation',
-                observation: c.observation || '',
-                recommendation: c.recommendation || '',
-                suggestedPatch: c.suggestedPatch,
-              }));
-            }
-          }
-        }
+        return await this.openAiProvider.consult(options);
       } catch (err) {
-        console.warn('Anthropic API error, falling back to heuristic critique:', err);
+        console.warn('OpenAI consultation failed, falling back to heuristics:', err);
       }
     }
 
-    // High-Fidelity Local Heuristic Advisor Engine (always works out-of-the-box)
-    return this.runHeuristicAnalysis(document, selectedNode, query);
+    // 2. Try Anthropic if it's a Claude model and key is present
+    if (!isGptModel && anthropicApiKey && anthropicApiKey.trim()) {
+      try {
+        return await this.anthropicProvider.consult(options);
+      } catch (err) {
+        console.warn('Anthropic consultation failed, falling back to heuristics:', err);
+      }
+    }
+
+    // 3. High-Fidelity Local Heuristic Engine (Offline / Instant fallback)
+    return this.runHeuristicAnalysis(options.document, options.selectedNode, options.query);
   }
 
-  private runHeuristicAnalysis(
+  public runHeuristicAnalysis(
     doc: PenDocument,
     selectedNode: PenNode | null | undefined,
     query: string
@@ -179,7 +141,6 @@ export class ClaudeOpusAdvisor {
       }
     }
 
-    // 3. Fallback General Advice if canvas is already well-formed
     if (critiques.length === 0) {
       critiques.push({
         id: 'crit-general-praise',
@@ -194,3 +155,5 @@ export class ClaudeOpusAdvisor {
     return critiques;
   }
 }
+
+export const MultiProviderAdvisor = ClaudeOpusAdvisor;

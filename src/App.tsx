@@ -7,6 +7,7 @@ import { PropertiesInspector } from './components/sidebar/PropertiesInspector';
 import { CodePreviewModal } from './components/panels/CodePreviewModal';
 import { PreviewModal } from './components/modals/PreviewModal';
 import { AdvisorDrawer } from './components/advisor/AdvisorDrawer';
+import { AgentConnectModal } from './components/modals/AgentConnectModal';
 import { useDesignStore } from './store/useDesignStore';
 import { ClaudeOpusAdvisor } from './advisor/ClaudeOpusAdvisor';
 
@@ -15,9 +16,10 @@ export default function App() {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isAdvisorOpen, setIsAdvisorOpen] = useState(false);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const { generateWebVariants, addNode, document: doc } = useDesignStore();
+  const { generateWebVariants, addNode, document: doc, toastMessage, setToastMessage, undo } = useDesignStore();
   const advisor = new ClaudeOpusAdvisor();
 
   const handleSendPrompt = async (prompt: string, model: string) => {
@@ -67,7 +69,30 @@ export default function App() {
         onPlayPreview={() => setIsPreviewOpen(true)}
         onImportWeb={handleImportWeb}
         onShare={() => alert('Share Link copied to clipboard!')}
+        onConnectAgents={() => setIsConnectModalOpen(true)}
       />
+
+      {/* Autonomous Co-Pilot Toast Notification */}
+      {toastMessage && (
+        <div className="absolute top-14 left-1/2 transform -translate-x-1/2 z-50 flex items-center gap-3 bg-[#181a26]/95 backdrop-blur-md border border-emerald-500/40 text-emerald-300 px-4 py-2 rounded-xl shadow-2xl text-xs animate-in fade-in slide-in-from-top-2">
+          <span>{toastMessage}</span>
+          <button
+            onClick={() => {
+              undo();
+              setToastMessage(null);
+            }}
+            className="bg-emerald-950 hover:bg-emerald-900 border border-emerald-700/60 text-white font-medium px-2 py-0.5 rounded text-[11px] transition"
+          >
+            Undo
+          </button>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-zinc-400 hover:text-white"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       {/* Main Studio Viewport */}
       <div className="flex flex-1 overflow-hidden relative">
@@ -116,6 +141,11 @@ export default function App() {
       <PreviewModal
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
+      />
+
+      <AgentConnectModal
+        isOpen={isConnectModalOpen}
+        onClose={() => setIsConnectModalOpen(false)}
       />
     </div>
   );

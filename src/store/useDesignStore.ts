@@ -42,6 +42,15 @@ interface DesignState {
   // Multi-variant generator
   generateWebVariants: (topic: string) => void;
 
+  // Autonomous Advisor Co-pilot State
+  isAutoAdvisorEnabled: boolean;
+  isAutonomousModeEnabled: boolean;
+  toastMessage: string | null;
+  toggleAutoAdvisor: () => void;
+  toggleAutonomousMode: () => void;
+  setToastMessage: (msg: string | null) => void;
+  applyAutonomousPatches: (critiques: any[]) => number;
+
   // Undo/Redo
   undo: () => void;
   redo: () => void;
@@ -357,6 +366,54 @@ export const useDesignStore = create<DesignState>((set, get) => ({
   activeTool: 'select',
   history: [{ document: JSON.parse(JSON.stringify(DEFAULT_PEN_DOC)) }],
   historyIndex: 0,
+
+  // Autonomous Advisor Co-pilot default state
+  isAutoAdvisorEnabled: true,
+  isAutonomousModeEnabled: true,
+  toastMessage: null,
+
+  toggleAutoAdvisor: () =>
+    set((state) => ({ isAutoAdvisorEnabled: !state.isAutoAdvisorEnabled })),
+
+  toggleAutonomousMode: () =>
+    set((state) => ({ isAutonomousModeEnabled: !state.isAutonomousModeEnabled })),
+
+  setToastMessage: (msg) => set({ toastMessage: msg }),
+
+  applyAutonomousPatches: (critiques) => {
+    const patches = critiques.filter(
+      (c) => c.suggestedPatch && (c.severity === 'critical' || c.severity === 'warning')
+    );
+    if (patches.length === 0) return 0;
+
+    let currentDoc = get().document;
+    for (const crit of patches) {
+      if (crit.suggestedPatch) {
+        currentDoc = {
+          ...currentDoc,
+          children: updateNodeInTree(
+            currentDoc.children,
+            crit.suggestedPatch.nodeId,
+            crit.suggestedPatch.patch
+          ),
+        };
+      }
+    }
+
+    set(pushHistory(get(), currentDoc));
+    set({
+      toastMessage: `🤖 Advisor tự động áp dụng ${patches.length} cải tiến thiết kế (Touch target & Grid). Nhấn Cmd+Z để hoàn tác.`,
+    });
+
+    // Auto dismiss toast after 4s
+    setTimeout(() => {
+      if (get().toastMessage) {
+        set({ toastMessage: null });
+      }
+    }, 4000);
+
+    return patches.length;
+  },
 
   loadDocument: (doc) => {
     set({

@@ -16,6 +16,9 @@ export const ChatInputBox: React.FC<ChatInputBoxProps> = ({ onSend, isLoading = 
     'Claude Opus 5.5',
     'Claude 3 Opus',
     'Claude 3.5 Sonnet',
+    'GPT-4o (ChatGPT)',
+    'o3-mini (Reasoning)',
+    'GPT-4.5 Preview',
   ];
 
   const handleSubmit = (e?: React.FormEvent) => {

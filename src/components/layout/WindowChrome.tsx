@@ -12,12 +12,14 @@ interface WindowChromeProps {
   onPlayPreview: () => void;
   onImportWeb: () => void;
   onShare: () => void;
+  onConnectAgents?: () => void;
 }
 
 export const WindowChrome: React.FC<WindowChromeProps> = ({
   onPlayPreview,
   onImportWeb,
   onShare,
+  onConnectAgents,
 }) => {
   return (
     <header className="flex h-11 w-full items-center justify-between border-b border-[#232533] bg-[#0c0d12] px-3.5 select-none z-30">
@@ -89,6 +91,21 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
         >
           <Globe className="h-3.5 w-3.5" />
         </button>
+
+        {/* Connect External Agents (agy, codeope, chatgpt) */}
+        {onConnectAgents && (
+          <button
+            onClick={onConnectAgents}
+            className="flex items-center gap-1 bg-[#1a1b28] hover:bg-[#25283b] text-orange-400 border border-orange-500/30 px-2.5 py-1 rounded-md text-[11px] font-mono transition"
+            title="Connect Antigravity, OpenCode, ChatGPT"
+          >
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-orange-500"></span>
+            </span>
+            <span>Connect Agents</span>
+          </button>
+        )}
 
         {/* User Avatar */}
         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-700 cursor-pointer">
