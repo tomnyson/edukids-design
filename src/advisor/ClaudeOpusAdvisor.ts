@@ -86,7 +86,7 @@ export class ClaudeOpusAdvisor {
 
     // 1. Accessibility Checks (Touch target size & contrast)
     if (selectedNode) {
-      if (selectedNode.height < 44 && selectedNode.name?.toLowerCase().includes('btn')) {
+      if ((selectedNode.height || 0) < 44 && selectedNode.name?.toLowerCase().includes('btn')) {
         critiques.push({
           id: `crit-a11y-touch-${selectedNode.id}`,
           category: 'accessibility',

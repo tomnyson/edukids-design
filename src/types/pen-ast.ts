@@ -9,10 +9,10 @@ export interface BaseNode {
   id: string;
   type: NodeType;
   name?: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
   rotation?: number;
   fill?: string;
   stroke?: string;

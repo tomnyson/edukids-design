@@ -24,7 +24,7 @@ export const InfiniteCanvas: React.FC = () => {
     if (e.ctrlKey || e.metaKey) {
       // Zoom
       const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-      const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.1), 5);
+      const newZoom = Math.min(Math.max(viewport.zoom * zoomFactor, 0.05), 5);
 
       // Zoom towards mouse pointer
       if (containerRef.current) {
@@ -63,10 +63,10 @@ export const InfiniteCanvas: React.FC = () => {
               x: canvasX,
               y: canvasY,
               width: 320,
-              height: 240,
-              fill: '#18181b',
+              height: 480,
+              fill: '#0f111a',
               cornerRadius: 12,
-              stroke: '#27272a',
+              stroke: '#1e2130',
               strokeWidth: 1,
             });
           } else if (activeTool === 'rect') {
@@ -77,7 +77,7 @@ export const InfiniteCanvas: React.FC = () => {
               y: canvasY,
               width: 140,
               height: 100,
-              fill: '#27272a',
+              fill: '#1c1f30',
               cornerRadius: 8,
             });
           } else if (activeTool === 'text') {
@@ -152,7 +152,7 @@ export const InfiniteCanvas: React.FC = () => {
   return (
     <div
       ref={containerRef}
-      className={`relative w-full h-full overflow-hidden bg-zinc-950 ${
+      className={`relative w-full h-full overflow-hidden bg-[#0c0d12] ${
         isPanning ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
       }`}
       onWheel={handleWheel}
@@ -161,8 +161,8 @@ export const InfiniteCanvas: React.FC = () => {
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       style={{
-        backgroundImage: `radial-gradient(circle, #27272a 1px, transparent 1px)`,
-        backgroundSize: `${24 * viewport.zoom}px ${24 * viewport.zoom}px`,
+        backgroundImage: `radial-gradient(circle, #1a1c29 1px, transparent 1px)`,
+        backgroundSize: `${28 * viewport.zoom}px ${28 * viewport.zoom}px`,
         backgroundPosition: `${viewport.x}px ${viewport.y}px`,
       }}
     >
@@ -178,26 +178,24 @@ export const InfiniteCanvas: React.FC = () => {
         ))}
       </div>
 
-      {/* Floating Canvas Quick Controls (Zoom, Reset) */}
-      <div className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-zinc-900/80 backdrop-blur-md border border-zinc-800/80 rounded-lg px-2.5 py-1 text-xs text-zinc-300 font-mono shadow-lg select-none">
+      {/* Floating Canvas Quick Controls (Zoom: -, 9%, +) matching pen.dev bottom-right */}
+      <div className="absolute bottom-4 right-4 flex items-center gap-1 bg-[#161722]/90 backdrop-blur-md border border-[#27293b] rounded-full px-3 py-1.5 text-xs text-zinc-300 font-mono shadow-2xl select-none z-20">
         <button
           onClick={() => setViewport(viewport.x, viewport.y, viewport.zoom * 0.85)}
           className="hover:text-white px-1.5 py-0.5 rounded transition"
+          title="Zoom Out"
         >
           -
         </button>
-        <span className="w-12 text-center">{Math.round(viewport.zoom * 100)}%</span>
+        <span className="w-12 text-center text-xs font-semibold text-zinc-200">
+          {Math.round(viewport.zoom * 100)}%
+        </span>
         <button
           onClick={() => setViewport(viewport.x, viewport.y, viewport.zoom * 1.15)}
           className="hover:text-white px-1.5 py-0.5 rounded transition"
+          title="Zoom In"
         >
           +
-        </button>
-        <button
-          onClick={() => setViewport(50, 50, 1)}
-          className="ml-2 text-[10px] text-zinc-400 hover:text-white transition border-l border-zinc-800 pl-2"
-        >
-          Reset
         </button>
       </div>
     </div>
