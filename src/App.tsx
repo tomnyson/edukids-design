@@ -4,10 +4,11 @@ import { LayerTree } from './components/sidebar/LayerTree';
 import { InfiniteCanvas } from './components/canvas/InfiniteCanvas';
 import { PropertiesInspector } from './components/sidebar/PropertiesInspector';
 import { CodePreviewModal } from './components/panels/CodePreviewModal';
+import { AdvisorDrawer } from './components/advisor/AdvisorDrawer';
 
 export default function App() {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false);
-  const [isAdvisorOpen, setIsAdvisorOpen] = useState(false);
+  const [isAdvisorOpen, setIsAdvisorOpen] = useState(true); // Open by default for immediate discoverability
 
   return (
     <div className="flex h-screen w-screen flex-col bg-zinc-950 text-zinc-100 font-sans overflow-hidden select-none">
@@ -34,6 +35,12 @@ export default function App() {
         <aside className="w-72 flex-shrink-0 h-full">
           <PropertiesInspector />
         </aside>
+
+        {/* Claude Opus Advisor Drawer */}
+        <AdvisorDrawer
+          isOpen={isAdvisorOpen}
+          onClose={() => setIsAdvisorOpen(false)}
+        />
       </div>
 
       {/* Bidirectional Code Sync Modal */}
