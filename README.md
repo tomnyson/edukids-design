@@ -1,4 +1,4 @@
-# Pen Studio: AI Design-as-Code Canvas & Studio
+# EduKids Design: AI Design-as-Code Canvas & Studio
 
 An open, high-performance **Design-as-Code Canvas** application compatible with **pen.dev** (`.pen` format v2.13), reverse-engineered using **REA MCP** (`morluto/rea`), featuring a built-in **Local MCP Server** and an integrated **Claude Opus Advisor** for architectural, design system, and UX consultations.
 
@@ -56,7 +56,7 @@ Add the local MCP server to your agent's MCP configuration file (e.g. `~/.cursor
 ```json
 {
   "mcpServers": {
-    "pen-studio": {
+    "edukids-design": {
       "command": "node",
       "args": ["/Applications/work/web-creator-ai/bin/pen-mcp.js"]
     }
@@ -78,3 +78,4 @@ This system was reverse-engineered from `/Applications/Pen.app` (`app.asar`) usi
 - **AST Specifications:** documented at [`docs/specs/pen-dev-ast-schema.md`](docs/specs/pen-dev-ast-schema.md)
 - **MCP Protocol Contracts:** documented at [`docs/specs/mcp-protocol-spec.md`](docs/specs/mcp-protocol-spec.md)
 - **Detailed Implementation Plan:** documented at [`docs/plans/2026-10-26-pen-dev-rea-advisor.md`](docs/plans/2026-10-26-pen-dev-rea-advisor.md)
+# edukids-design
