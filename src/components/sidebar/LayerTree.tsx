@@ -1,23 +1,38 @@
-import React from 'react';
-import { Layers, Square, Type, Frame, Eye, Trash2 } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
+import { Layers, Square, Circle, Type, Frame, Eye, Trash2, Image as ImageIcon, Component, Diamond } from 'lucide-react';
 import { useDesignStore } from '../../store/useDesignStore';
 import { PenNode } from '../../types/pen-ast';
+import { layerPasteTarget, selectionForLayerRow } from '../../lib/context-menu';
+import { CanvasContextMenu, ContextMenuState } from '../canvas/CanvasContextMenu';
+
+type RowContextMenuHandler = (e: React.MouseEvent, nodeId: string) => void;
 
 interface LayerItemProps {
   node: PenNode;
   depth?: number;
+  onRowContextMenu: RowContextMenuHandler;
 }
 
-const LayerItem: React.FC<LayerItemProps> = ({ node, depth = 0 }) => {
+const LayerItem: React.FC<LayerItemProps> = ({ node, depth = 0, onRowContextMenu }) => {
   const { selectedNodeIds, selectNode, deleteSelectedNodes } = useDesignStore();
   const isSelected = selectedNodeIds.includes(node.id);
 
   const getIcon = () => {
     switch (node.type) {
       case 'frame':
-        return <Frame className="h-3.5 w-3.5 text-orange-400" />;
+        return node.reusable ? (
+          <Component className="h-3.5 w-3.5 text-violet-400" aria-label="Component" />
+        ) : (
+          <Frame className="h-3.5 w-3.5 text-orange-400" />
+        );
+      case 'component':
+        return <Diamond className="h-3.5 w-3.5 text-violet-400" aria-label="Instance" />;
       case 'text':
         return <Type className="h-3.5 w-3.5 text-blue-400" />;
+      case 'image':
+        return <ImageIcon className="h-3.5 w-3.5 text-emerald-400" />;
+      case 'ellipse':
+        return <Circle className="h-3.5 w-3.5 text-zinc-400" />;
       case 'rect':
       default:
         return <Square className="h-3.5 w-3.5 text-zinc-400" />;
@@ -31,6 +46,7 @@ const LayerItem: React.FC<LayerItemProps> = ({ node, depth = 0 }) => {
           e.stopPropagation();
           selectNode(node.id, e.shiftKey || e.metaKey);
         }}
+        onContextMenu={(e) => onRowContextMenu(e, node.id)}
         className={`group flex items-center justify-between px-2.5 py-1.5 rounded-md cursor-pointer text-xs transition ${
           isSelected
             ? 'bg-blue-600/20 text-blue-300 font-medium border border-blue-500/30'
@@ -61,7 +77,7 @@ const LayerItem: React.FC<LayerItemProps> = ({ node, depth = 0 }) => {
       {'children' in node && node.children && (
         <div>
           {node.children.map((child) => (
-            <LayerItem key={child.id} node={child} depth={depth + 1} />
+            <LayerItem key={child.id} node={child} depth={depth + 1} onRowContextMenu={onRowContextMenu} />
           ))}
         </div>
       )}
@@ -71,6 +87,22 @@ const LayerItem: React.FC<LayerItemProps> = ({ node, depth = 0 }) => {
 
 export const LayerTree: React.FC = () => {
   const { document: doc } = useDesignStore();
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+
+  // Same layer menu as the canvas; right-click selects the row unless it is already part of the selection
+  const handleRowContextMenu: RowContextMenuHandler = useCallback((e, nodeId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const { selectedNodeIds, selectNode, document: currentDoc } = useDesignStore.getState();
+    const nextSelection = selectionForLayerRow(selectedNodeIds, nodeId);
+    if (nextSelection !== selectedNodeIds) selectNode(nodeId);
+    setContextMenu({
+      screen: { x: e.clientX, y: e.clientY },
+      targetIsNode: true,
+      paste: layerPasteTarget(currentDoc.children, nodeId),
+    });
+  }, []);
 
   const countNodes = (nodes: PenNode[]): number => {
     return nodes.reduce((acc, curr) => {
@@ -95,9 +127,10 @@ export const LayerTree: React.FC = () => {
         {doc.children.length === 0 ? (
           <div className="p-4 text-center text-xs text-zinc-600">Canvas is empty</div>
         ) : (
-          doc.children.map((node) => <LayerItem key={node.id} node={node} depth={0} />)
+          doc.children.map((node) => <LayerItem key={node.id} node={node} depth={0} onRowContextMenu={handleRowContextMenu} />)
         )}
       </div>
+      {contextMenu && <CanvasContextMenu menu={contextMenu} onClose={closeContextMenu} />}
     </div>
   );
 };

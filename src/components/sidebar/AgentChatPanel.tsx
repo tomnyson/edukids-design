@@ -6,19 +6,21 @@ import {
   Component,
   Terminal,
   Plus,
-  ChevronDown,
 } from 'lucide-react';
-import { ChatInputBox } from './ChatInputBox';
+import { ChatInputBox, SendPromptHandler } from './ChatInputBox';
+import { AgentSessionMenu } from './AgentSessionMenu';
+import { ChatTranscript } from './ChatTranscript';
+import { useDesignStore } from '../../store/useDesignStore';
+import { useAgentChatStore } from '../../store/useAgentChatStore';
 
 export type SidebarTab = 'agent' | 'layers' | 'screens' | 'components' | 'code';
 
 interface AgentChatPanelProps {
   activeTab: SidebarTab;
   onSelectTab: (tab: SidebarTab) => void;
-  onSendPrompt: (prompt: string, model: string) => void;
+  onSendPrompt: SendPromptHandler;
   isGenerating?: boolean;
   onOpenBrowserImport?: () => void;
-  onNewDocument?: () => void;
 }
 
 export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
@@ -27,8 +29,12 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
   onSendPrompt,
   isGenerating = false,
   onOpenBrowserImport,
-  onNewDocument,
 }) => {
+  const selectedModel = useDesignStore((state) => state.selectedModel);
+  const activeMessages = useAgentChatStore(
+    (state) => state.sessions.find((session) => session.id === state.activeSessionId)?.messages
+  );
+  const newSession = useAgentChatStore((state) => state.newSession);
   const suggestions = [
     'Warm minimal booking site for a Lisbon ceramic studio',
     'Editorial portfolio for an avant-garde fashion label',
@@ -73,7 +79,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
               ? 'bg-[#1e202e] text-zinc-100 border border-[#2d2f44]'
               : 'text-zinc-500 hover:text-zinc-300'
           }`}
-          title="Screens"
+          title="Slides"
         >
           <Monitor className="h-3.5 w-3.5" />
         </button>
@@ -103,24 +109,23 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         </button>
       </div>
 
-      {/* Agent Dropdown & New Button */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-[#1c1d29]/80">
-        <button className="flex items-center gap-1.5 px-2 py-1 rounded bg-[#161722] hover:bg-[#1e202f] border border-[#27293a] text-xs font-medium text-zinc-200 transition">
-          <span>New Agent</span>
-          <ChevronDown className="h-3 w-3 text-zinc-500" />
-        </button>
+      {/* Agent chat history & new chat */}
+      <div className="flex items-center justify-between gap-2 px-3.5 py-2.5 border-b border-[#1c1d29]/80">
+        <AgentSessionMenu />
 
         <button
-          onClick={onNewDocument}
-          className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded hover:bg-[#1a1b26] transition font-medium cursor-pointer"
-          title="Create New Blank Document (Cmd+N)"
+          onClick={newSession}
+          className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 rounded hover:bg-[#1a1b26] transition font-medium cursor-pointer flex-shrink-0"
+          title="New agent chat (new document: Cmd+N)"
         >
           <Plus className="h-3.5 w-3.5 text-zinc-500" />
           <span>New</span>
         </button>
       </div>
 
-      {/* Scrollable Guidance & Suggestion Area */}
+      {activeMessages && activeMessages.length > 0 ? (
+        <ChatTranscript messages={activeMessages} />
+      ) : (
       <div className="flex-1 overflow-y-auto px-3.5 py-3 space-y-4">
         {/* Suggestion Prompts Section */}
         <div className="space-y-2">
@@ -129,8 +134,9 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
             {suggestions.map((item, idx) => (
               <button
                 key={idx}
-                onClick={() => onSendPrompt(item, 'Claude Opus 4.5')}
-                className="text-left text-xs text-zinc-300 bg-[#161722] hover:bg-[#202232] hover:text-white px-3 py-2 rounded-xl border border-[#262838] transition leading-snug truncate"
+                onClick={() => onSendPrompt(item, selectedModel)}
+                disabled={isGenerating}
+                className="disabled:opacity-50 disabled:cursor-not-allowed text-left text-xs text-zinc-300 bg-[#161722] hover:bg-[#202232] hover:text-white px-3 py-2 rounded-xl border border-[#262838] transition leading-snug truncate"
                 title={item}
               >
                 {item}
@@ -151,7 +157,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
         <div className="space-y-1">
           <h5 className="text-[11px] font-semibold text-zinc-300">Generate code</h5>
           <p className="text-[11px] text-zinc-500 leading-relaxed">
-            Ask the agent to build your design with React, Tailwind, Next.js, or your preferred stack. For an HTML file, select a frame and click &ldquo;Export HTML&rdquo; in the properties panel.
+            Ask the agent to build your design with React, Tailwind, Next.js, or your preferred stack. For an HTML file, select a frame and choose File &rarr; &ldquo;Export HTML&rdquo;.
           </p>
         </div>
 
@@ -163,6 +169,7 @@ export const AgentChatPanel: React.FC<AgentChatPanelProps> = ({
           </p>
         </div>
       </div>
+      )}
 
       {/* Bottom Chat Bar Container */}
       <div className="p-3 bg-[#0d0e15] border-t border-[#1c1d29]">

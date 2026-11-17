@@ -1,5 +1,5 @@
 import { PenDocument, PenNode } from '../../types/pen-ast';
-import { parsePenDocument } from '../schema/pen-validator';
+import { fromPenFile, toPenFile } from './pen-format';
 
 /**
  * Generates random 5-character ID matching pen.dev identifier style (e.g. "YKsGt", "AmD9T")
@@ -14,18 +14,17 @@ export function generateNodeId(): string {
 }
 
 /**
- * Serializes a PenDocument into deterministic formatted JSON suitable for git commits
+ * Serializes a PenDocument as a pen.dev .pen file: formatted JSON suitable for git commits
  */
 export function serializePenDocument(doc: PenDocument): string {
-  return JSON.stringify(doc, null, 2) + '\n';
+  return JSON.stringify(toPenFile(doc), null, 2) + '\n';
 }
 
 /**
  * Deserializes and validates raw JSON text into a typed PenDocument
  */
 export function deserializePenDocument(jsonString: string): PenDocument {
-  const parsed = JSON.parse(jsonString);
-  return parsePenDocument(parsed) as PenDocument;
+  return fromPenFile(JSON.parse(jsonString));
 }
 
 /**

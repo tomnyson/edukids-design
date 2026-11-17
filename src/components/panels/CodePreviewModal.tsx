@@ -4,6 +4,8 @@ import { useDesignStore } from '../../store/useDesignStore';
 import { generateReactComponent } from '../../compiler/ast-to-jsx';
 import { parseJsxToAst } from '../../compiler/jsx-to-ast';
 import { findNodeById } from '../../core/io/pen-file-handler';
+import { expandInstances } from '../../lib/components';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
 interface CodePreviewModalProps {
   isOpen: boolean;
@@ -15,6 +17,7 @@ export const CodePreviewModal: React.FC<CodePreviewModalProps> = ({ isOpen, onCl
   const [copied, setCopied] = useState(false);
   const [pasteInput, setPasteInput] = useState('');
   const [activeTab, setActiveTab] = useState<'export' | 'import'>('export');
+  const handleBackdropMouseDown = useEscapeToClose(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -24,8 +27,10 @@ export const CodePreviewModal: React.FC<CodePreviewModalProps> = ({ isOpen, onCl
       ? findNodeById(doc.children, selectedNodeIds[0]) || doc.children[0]
       : doc.children[0];
 
-  const generatedCode = targetNode
-    ? generateReactComponent(targetNode, targetNode.name?.replace(/[^a-zA-Z0-9]/g, '') || 'GeneratedView')
+  // Instances show their master content in code too
+  const [codeNode] = targetNode ? expandInstances([targetNode], doc.children) : [];
+  const generatedCode = codeNode
+    ? generateReactComponent(codeNode, codeNode.name?.replace(/[^a-zA-Z0-9]/g, '') || 'GeneratedView')
     : '// No element available to export';
 
   const handleCopy = () => {
@@ -47,7 +52,13 @@ export const CodePreviewModal: React.FC<CodePreviewModalProps> = ({ isOpen, onCl
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Bidirectional Code Sync"
+      onMouseDown={handleBackdropMouseDown}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+    >
       <div className="flex flex-col h-[520px] w-[680px] bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden text-zinc-100">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 bg-zinc-950/60">

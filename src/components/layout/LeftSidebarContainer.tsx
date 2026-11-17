@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { AgentChatPanel, SidebarTab } from '../sidebar/AgentChatPanel';
+import { SendPromptHandler } from '../sidebar/ChatInputBox';
 import { LayerTree } from '../sidebar/LayerTree';
+import { SlidesPanel, slidesOf } from '../sidebar/SlidesPanel';
+import { ComponentsPanel } from '../sidebar/ComponentsPanel';
 import { useDesignStore } from '../../store/useDesignStore';
 import { Monitor, Component, Terminal, Layers } from 'lucide-react';
 
 interface LeftSidebarContainerProps {
   onOpenCodeModal: () => void;
-  onSendPrompt: (prompt: string, model: string) => void;
+  onSendPrompt: SendPromptHandler;
   isGenerating?: boolean;
   onOpenBrowserImport?: () => void;
-  onNewDocument?: () => void;
 }
 
 export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
@@ -17,10 +19,9 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
   onSendPrompt,
   isGenerating,
   onOpenBrowserImport,
-  onNewDocument,
 }) => {
   const [activeTab, setActiveTab] = useState<SidebarTab>('agent');
-  const { document: doc, selectNode, selectedNodeIds } = useDesignStore();
+  const doc = useDesignStore((state) => state.document);
 
   const handleTabChange = (tab: SidebarTab) => {
     setActiveTab(tab);
@@ -38,7 +39,6 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
           onSendPrompt={onSendPrompt}
           isGenerating={isGenerating}
           onOpenBrowserImport={onOpenBrowserImport}
-          onNewDocument={onNewDocument}
         />
       )}
 
@@ -60,6 +60,8 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
             </button>
             <button
               onClick={() => handleTabChange('screens')}
+              title="Slides"
+              aria-label="Slides"
               className="p-1.5 text-zinc-500 hover:text-zinc-300"
             >
               <Monitor className="h-3.5 w-3.5" />
@@ -102,39 +104,12 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
               onClick={() => handleTabChange('screens')}
               className="px-2.5 py-1 bg-[#1e202e] text-zinc-100 rounded-md border border-[#2d2f44] text-xs font-medium"
             >
-              Screens ({doc.children.length})
+              Slides ({slidesOf(doc.children).length})
             </button>
           </div>
 
-          <div className="p-3 space-y-2 overflow-y-auto flex-1">
-            {doc.children.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-48 text-center text-zinc-500 text-xs p-4">
-                <Monitor className="h-8 w-8 mb-2 text-zinc-600 stroke-[1.5]" />
-                <p className="font-medium text-zinc-400">Tài liệu trống</p>
-                <p className="text-[11px] text-zinc-600 mt-1">
-                  Chưa có frame nào. Dùng công cụ Frame (F) hoặc yêu cầu Agent để tạo.
-                </p>
-              </div>
-            ) : (
-              doc.children.map((child, i) => (
-                <div
-                  key={child.id}
-                  onClick={() => selectNode(child.id)}
-                  className={`p-2.5 rounded-xl border cursor-pointer transition ${
-                    selectedNodeIds.includes(child.id)
-                      ? 'bg-[#1b1e2e] border-sky-500/50 text-white font-medium'
-                      : 'bg-[#141520] border-[#222434] text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs truncate">{child.name || `Screen ${i + 1}`}</span>
-                    <span className="text-[10px] text-zinc-500 font-mono">
-                      {child.width}x{child.height}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
+          <div className="overflow-y-auto flex-1">
+            <SlidesPanel />
           </div>
         </div>
       )}
@@ -149,31 +124,21 @@ export const LeftSidebarContainer: React.FC<LeftSidebarContainerProps> = ({
               Agent
             </button>
             <button
+              onClick={() => handleTabChange('layers')}
+              className="px-2.5 py-1 text-xs text-zinc-500 hover:text-zinc-300"
+            >
+              Layers
+            </button>
+            <button
               onClick={() => handleTabChange('components')}
               className="px-2.5 py-1 bg-[#1e202e] text-zinc-100 rounded-md border border-[#2d2f44] text-xs font-medium"
             >
-              Component Library
+              Components
             </button>
           </div>
 
-          <div className="p-3 space-y-3 overflow-y-auto flex-1 text-xs">
-            <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
-              Ready-made Blocks
-            </span>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="p-3 bg-[#141520] border border-[#222434] rounded-lg text-center hover:border-zinc-700 cursor-pointer">
-                <span>Hero Banner</span>
-              </div>
-              <div className="p-3 bg-[#141520] border border-[#222434] rounded-lg text-center hover:border-zinc-700 cursor-pointer">
-                <span>Pricing Table</span>
-              </div>
-              <div className="p-3 bg-[#141520] border border-[#222434] rounded-lg text-center hover:border-zinc-700 cursor-pointer">
-                <span>Product Card</span>
-              </div>
-              <div className="p-3 bg-[#141520] border border-[#222434] rounded-lg text-center hover:border-zinc-700 cursor-pointer">
-                <span>Footer</span>
-              </div>
-            </div>
+          <div className="overflow-y-auto flex-1">
+            <ComponentsPanel />
           </div>
         </div>
       )}

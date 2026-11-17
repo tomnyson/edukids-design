@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, Terminal, Bot, Sparkles, CheckCircle2 } from 'lucide-react';
+import { useEscapeToClose } from '../../hooks/useEscapeToClose';
 
 interface AgentConnectModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface AgentConnectModalProps {
 
 export const AgentConnectModal: React.FC<AgentConnectModalProps> = ({ isOpen, onClose }) => {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const handleBackdropMouseDown = useEscapeToClose(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -30,7 +32,7 @@ export const AgentConnectModal: React.FC<AgentConnectModalProps> = ({ isOpen, on
       id: 'codeope',
       name: 'OpenCode / Codex (codeope)',
       desc: 'Local MCP connection for OpenCode CLI agent',
-      command: 'npx opencode mcp add pen-studio node ' + window.location.origin + '/bin/pen-mcp.js',
+      command: 'npx opencode mcp add edukids-design node ' + window.location.origin + '/bin/pen-mcp.js',
       configFile: '~/.config/opencode/mcp.json',
       badge: 'Supported',
     },
@@ -46,14 +48,20 @@ export const AgentConnectModal: React.FC<AgentConnectModalProps> = ({ isOpen, on
       id: 'claude',
       name: 'Claude Code CLI',
       desc: 'Direct connection from Claude Code terminal',
-      command: 'claude mcp add pen-studio node ./bin/pen-mcp.js',
+      command: 'claude mcp add edukids-design node ./bin/pen-mcp.js',
       configFile: 'claude_desktop_config.json',
       badge: 'Active',
     },
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 select-none text-zinc-100">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Connect External Coding Agents"
+      onMouseDown={handleBackdropMouseDown}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-4 select-none text-zinc-100"
+    >
       <div className="flex flex-col h-[520px] w-[640px] bg-[#12131d] border border-[#27293b] rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-[#202232] bg-[#0c0d13]">
@@ -72,7 +80,7 @@ export const AgentConnectModal: React.FC<AgentConnectModalProps> = ({ isOpen, on
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <p className="text-xs text-zinc-400 leading-relaxed">
-            Pen Studio runs a local Model Context Protocol server on stdio &amp; port 32100. Any agent can inspect, draw, and modify canvas artboards in real-time.
+            EduKids Design runs a local Model Context Protocol server on stdio &amp; port 32100. Any agent can inspect, draw, and modify canvas artboards in real-time.
           </p>
 
           <div className="space-y-3">

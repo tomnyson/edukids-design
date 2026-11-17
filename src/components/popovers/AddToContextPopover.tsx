@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { useDesignStore } from '../../store/useDesignStore';
 
+const MAX_CONTEXT_FILE_CHARS = 50_000;
+
 interface AddToContextPopoverProps {
   isOpen: boolean;
   onClose: () => void;
@@ -41,12 +43,20 @@ export const AddToContextPopover: React.FC<AddToContextPopoverProps> = ({
       };
       reader.readAsDataURL(file);
     } else {
-      addContextAttachment({
-        id: `file-${Date.now()}`,
-        type: 'file',
-        name: file.name,
-      });
-      onClose();
+      // Text content is sent to the design agent; very large files are cut to keep prompts bounded
+      file
+        .text()
+        .then((text) => text.slice(0, MAX_CONTEXT_FILE_CHARS))
+        .catch(() => undefined)
+        .then((content) => {
+          addContextAttachment({
+            id: `file-${Date.now()}`,
+            type: 'file',
+            name: file.name,
+            content,
+          });
+          onClose();
+        });
     }
   };
 

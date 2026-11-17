@@ -106,4 +106,15 @@ describe('Pen AST & Schema Validation', () => {
     const parsed = deserializePenDocument(serialized);
     expect(parsed).toEqual(sampleDoc);
   });
+
+  it('accepts flipX and flipY booleans', () => {
+    const raw = JSON.stringify({
+      version: '2.13',
+      children: [{ id: 'r', type: 'rect', x: 0, y: 0, width: 10, height: 10, flipX: true, flipY: false }],
+    });
+    const parsed = deserializePenDocument(raw);
+    expect(parsed.children[0]).toMatchObject({ flipX: true, flipY: false });
+    // The node schema passes unknown keys through, so only a typed field rejects a non-boolean
+    expect(() => deserializePenDocument(raw.replace('"flipX":true', '"flipX":"yes"'))).toThrow();
+  });
 });

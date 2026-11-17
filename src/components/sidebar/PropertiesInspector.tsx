@@ -2,7 +2,8 @@ import React from 'react';
 import { Sliders, AlignLeft, AlignCenter, AlignRight, Columns, Rows } from 'lucide-react';
 import { useDesignStore } from '../../store/useDesignStore';
 import { findNodeById } from '../../core/io/pen-file-handler';
-import { FrameNode, TextNode } from '../../types/pen-ast';
+import { FrameNode, ImageNode, TextNode } from '../../types/pen-ast';
+import { ImageProperties } from './ImageProperties';
 
 export const PropertiesInspector: React.FC = () => {
   const { document: doc, selectedNodeIds, updateNode } = useDesignStore();
@@ -111,6 +112,8 @@ export const PropertiesInspector: React.FC = () => {
             />
           </div>
         </div>
+
+        {selectedNode.type === 'image' && <ImageProperties image={selectedNode as ImageNode} />}
 
         {/* Text Properties */}
         {isText && text && (

@@ -1,8 +1,11 @@
 {
-  "name": "web-creator-ai",
+  "name": "edukids-design",
   "private": true,
   "version": "1.0.0",
+  "description": "EduKids Design",
+  "author": "EduKids",
   "type": "module",
+  "main": "dist-desktop/main.cjs",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -10,12 +13,36 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "mcp:server": "node --loader ts-node/esm src/mcp/server.ts",
-    "mcp:setup": "node scripts/setup-mcp-agents.js"
+    "mcp:setup": "node scripts/setup-mcp-agents.js",
+    "desktop:main": "esbuild desktop/main.ts --bundle --platform=node --format=cjs --external:electron --outfile=dist-desktop/main.cjs",
+    "desktop:icon": "node scripts/build-icon.mjs",
+    "desktop:dev": "npm run build && npm run desktop:main && electron .",
+    "desktop:dist": "npm run build && npm run desktop:icon && npm run desktop:main && electron-builder --mac dmg --arm64"
+  },
+  "build": {
+    "appId": "com.edukids.design",
+    "productName": "EduKids Design",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "dist-desktop/**",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.graphics-design",
+      "icon": "build/icon.png",
+      "identity": "-"
+    }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
     "@modelcontextprotocol/sdk": "^1.6.1",
     "clsx": "^2.1.1",
+    "html-to-image": "^1.11.13",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.477.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -29,6 +56,10 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^45.3.3",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.28.2",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.0.9",
     "typescript": "^5.8.2",
     "vite": "^6.2.0",

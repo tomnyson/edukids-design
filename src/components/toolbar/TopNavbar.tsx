@@ -1,6 +1,5 @@
 import React, { useRef } from 'react';
 import {
-  PenTool,
   MousePointer,
   Square,
   Type,
@@ -14,6 +13,8 @@ import {
 } from 'lucide-react';
 import { useDesignStore, ToolType } from '../../store/useDesignStore';
 import { serializePenDocument, deserializePenDocument } from '../../core/io/pen-file-handler';
+import { BrandLogo } from '../brand/BrandLogo';
+import { BRAND } from '../../lib/brand';
 
 interface TopNavbarProps {
   onToggleCodeModal: () => void;
@@ -77,11 +78,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     <header className="flex h-12 w-full items-center justify-between border-b border-zinc-800/80 bg-zinc-900/70 px-3 backdrop-blur-md select-none z-10">
       {/* Brand & File Operations */}
       <div className="flex items-center gap-3">
-        <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-orange-500/20 text-orange-400 border border-orange-500/40">
-          <PenTool className="h-4 w-4" />
-        </div>
+        <BrandLogo size={28} />
         <div className="flex items-center gap-1.5">
-          <span className="font-semibold text-xs tracking-wide text-zinc-200">Pen Studio</span>
+          <span className="font-semibold text-xs tracking-wide text-zinc-200">{BRAND.name}</span>
           <span className="text-[10px] text-zinc-500 font-mono">v2.13</span>
         </div>
 

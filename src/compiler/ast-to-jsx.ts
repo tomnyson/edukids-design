@@ -1,16 +1,44 @@
-import { PenNode, FrameNode, TextNode, PathNode } from '../types/pen-ast';
+import { PenNode, FrameNode, TextNode, PathNode, ImageNode } from '../types/pen-ast';
+import { imageFit, safeImageSrc } from '../lib/image-source';
+
+/**
+ * How a node sits in its parent: the root anchors the layout, children of
+ * free-form frames keep their canvas x/y, children of flex frames flow.
+ */
+type Placement = 'root' | 'absolute' | 'flow';
+
+const HEX_COLOR = /^#[0-9a-fA-F]{3,8}$/;
+
+/** Only plain hex colors become classes; anything else could break out of className */
+function hexColor(value: string | undefined): string | null {
+  return value && HEX_COLOR.test(value) ? value : null;
+}
+
+function flipClasses(node: PenNode): string[] {
+  return [node.flipX ? '-scale-x-100' : '', node.flipY ? '-scale-y-100' : ''].filter(Boolean);
+}
+
+function placementClasses(node: PenNode, placement: Placement, hasChildren: boolean): string[] {
+  if (placement === 'absolute') return ['absolute', `left-[${node.x ?? 0}px]`, `top-[${node.y ?? 0}px]`, ...flipClasses(node)];
+  return [...(hasChildren ? ['relative'] : []), ...flipClasses(node)];
+}
+
+function jsxText(content: string): string {
+  return /[{}<>]/.test(content) ? `{${JSON.stringify(content)}}` : content;
+}
 
 /**
  * Converts a PenNode AST into semantic React JSX string styled with Tailwind CSS
  */
-export function compileAstToJsx(node: PenNode, indentLevel: number = 2): string {
+export function compileAstToJsx(node: PenNode, indentLevel: number = 2, placement: Placement = 'root'): string {
   const indent = ' '.repeat(indentLevel);
   const childIndent = ' '.repeat(indentLevel + 2);
 
   switch (node.type) {
     case 'frame': {
       const frame = node as FrameNode;
-      const classNames: string[] = [];
+      const hasChildren = (frame.children?.length ?? 0) > 0;
+      const classNames: string[] = placementClasses(frame, placement, hasChildren && frame.layout !== 'flex');
 
       // Layout mode
       if (frame.layout === 'flex') {
@@ -49,16 +77,14 @@ export function compileAstToJsx(node: PenNode, indentLevel: number = 2): string 
 
       // Fill / Background
       if (frame.fill) {
-        if (frame.fill.startsWith('#')) {
-          classNames.push(`bg-[${frame.fill}]`);
-        } else {
-          classNames.push('bg-zinc-900');
-        }
+        const fill = hexColor(frame.fill);
+        classNames.push(fill ? `bg-[${fill}]` : 'bg-zinc-900');
       }
 
       // Border & Radius
-      if (frame.stroke) {
-        classNames.push(`border border-[${frame.stroke}]`);
+      const stroke = hexColor(frame.stroke);
+      if (stroke) {
+        classNames.push(`border border-[${stroke}]`);
       }
       if (frame.cornerRadius) {
         classNames.push(`rounded-[${frame.cornerRadius}px]`);
@@ -78,8 +104,9 @@ export function compileAstToJsx(node: PenNode, indentLevel: number = 2): string 
         return `${indent}<${tag}${classAttr} />`;
       }
 
+      const childPlacement: Placement = frame.layout === 'flex' ? 'flow' : 'absolute';
       const childrenJsx = frame.children
-        .map((child) => compileAstToJsx(child, indentLevel + 2))
+        .map((child) => compileAstToJsx(child, indentLevel + 2, childPlacement))
         .join('\n');
 
       return `${indent}<${tag}${classAttr}>\n${childrenJsx}\n${indent}</${tag}>`;
@@ -87,14 +114,13 @@ export function compileAstToJsx(node: PenNode, indentLevel: number = 2): string 
 
     case 'text': {
       const text = node as TextNode;
-      const classNames: string[] = [];
+      const classNames: string[] = placementClasses(text, placement, false);
+      if (text.width) classNames.push(`w-[${text.width}px]`);
+      if (text.height) classNames.push(`h-[${text.height}px]`);
 
       // Color
-      if (text.fill && text.fill.startsWith('#')) {
-        classNames.push(`text-[${text.fill}]`);
-      } else {
-        classNames.push('text-zinc-100');
-      }
+      const color = hexColor(text.fill);
+      classNames.push(color ? `text-[${color}]` : 'text-zinc-100');
 
       // Typography
       if (text.fontSize) {
@@ -113,27 +139,42 @@ export function compileAstToJsx(node: PenNode, indentLevel: number = 2): string 
       const classAttr = classNames.length > 0 ? ` className="${classNames.join(' ')}"` : '';
       const tag = text.fontSize && text.fontSize >= 24 ? 'h2' : 'span';
 
-      return `${indent}<${tag}${classAttr}>${text.content || ''}</${tag}>`;
+      return `${indent}<${tag}${classAttr}>${jsxText(text.content || '')}</${tag}>`;
     }
 
     case 'path': {
       const pathNode = node as PathNode;
-      return `${indent}<svg width="${pathNode.width || 24}" height="${
+      const placed = placementClasses(pathNode, placement, false);
+      const pathClass = placed.length > 0 ? ` className="${placed.join(' ')}"` : '';
+      return `${indent}<svg${pathClass} width="${pathNode.width || 24}" height="${
         pathNode.height || 24
-      }" viewBox="0 0 100 100" fill="none">\n${childIndent}<path d="${
+      }" viewBox="0 0 100 100" preserveAspectRatio="none" fill="none">\n${childIndent}<path d=${JSON.stringify(
         pathNode.geometry || ''
-      }" stroke="${pathNode.stroke || 'currentColor'}" strokeWidth="${
+      )} stroke="${hexColor(pathNode.stroke) ?? 'currentColor'}" strokeWidth="${
         pathNode.strokeWidth || 2
       }" strokeLinecap="round" strokeLinejoin="round" />\n${indent}</svg>`;
     }
 
+    case 'image': {
+      const image = node as ImageNode;
+      const classNames: string[] = placementClasses(image, placement, false);
+      if (image.width) classNames.push(`w-[${image.width}px]`);
+      if (image.height) classNames.push(`h-[${image.height}px]`);
+      classNames.push(`object-${imageFit(image.fit)}`);
+      if (image.cornerRadius) classNames.push(`rounded-[${image.cornerRadius}px]`);
+      const src = safeImageSrc(image.src) ?? '';
+      return `${indent}<img src=${JSON.stringify(src)} alt=${JSON.stringify(image.alt ?? image.name ?? '')} className="${classNames.join(' ')}" />`;
+    }
+
     case 'rect':
     default: {
-      const classNames: string[] = [];
+      const classNames: string[] = placementClasses(node, placement, false);
       if (node.width) classNames.push(`w-[${node.width}px]`);
       if (node.height) classNames.push(`h-[${node.height}px]`);
-      if (node.fill && node.fill.startsWith('#')) classNames.push(`bg-[${node.fill}]`);
-      if (node.cornerRadius) classNames.push(`rounded-[${node.cornerRadius}px]`);
+      const fill = hexColor(node.fill);
+      if (fill) classNames.push(`bg-[${fill}]`);
+      if (node.type === 'ellipse') classNames.push('rounded-full');
+      else if (node.cornerRadius) classNames.push(`rounded-[${node.cornerRadius}px]`);
       const classAttr = classNames.length > 0 ? ` className="${classNames.join(' ')}"` : '';
       return `${indent}<div${classAttr} />`;
     }

@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   PanelLeftClose,
   MousePointer,
   Frame,
   Square,
-  Diamond,
+  Circle,
   Type,
   PenTool,
   Crop,
@@ -16,6 +16,10 @@ import {
   MoreHorizontal,
 } from 'lucide-react';
 import { ToolType, useDesignStore } from '../../store/useDesignStore';
+import { ImageInsertPopover } from '../popovers/ImageInsertPopover';
+
+/** Tools that are planned but not built yet: visible, dimmed and inert */
+const COMING_SOON_CLASS = 'p-2 rounded-xl text-zinc-600 opacity-50 cursor-not-allowed';
 
 interface FloatingToolDockProps {
   onToggleSidebar: () => void;
@@ -29,6 +33,7 @@ export const FloatingToolDock: React.FC<FloatingToolDockProps> = ({
   onOpenComponents,
 }) => {
   const { activeTool, setActiveTool } = useDesignStore();
+  const [isImageOpen, setIsImageOpen] = useState(false);
 
   const handleToolClick = (tool: ToolType) => {
     setActiveTool(tool);
@@ -86,13 +91,17 @@ export const FloatingToolDock: React.FC<FloatingToolDockProps> = ({
         <Square className="h-4 w-4" />
       </button>
 
-      {/* 5. Diamond / Shape */}
+      {/* 5. Ellipse */}
       <button
-        onClick={() => handleToolClick('rect')}
-        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] transition"
-        title="Diamond / Polygon"
+        onClick={() => handleToolClick('ellipse')}
+        className={`p-2 rounded-xl transition ${
+          activeTool === 'ellipse'
+            ? 'bg-[#252738] text-orange-400 shadow-sm'
+            : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#202232]'
+        }`}
+        title="Ellipse (O)"
       >
-        <Diamond className="h-4 w-4" />
+        <Circle className="h-4 w-4" />
       </button>
 
       {/* 6. Text */}
@@ -110,24 +119,30 @@ export const FloatingToolDock: React.FC<FloatingToolDockProps> = ({
 
       {/* 7. Pen Vector */}
       <button
-        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] transition"
-        title="Pen Vector Tool (P)"
+        disabled
+        aria-disabled="true"
+        className={COMING_SOON_CLASS}
+        title="Pen Vector Tool (sắp có)"
       >
         <PenTool className="h-4 w-4" />
       </button>
 
       {/* 8. Crop */}
       <button
-        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] transition"
-        title="Crop"
+        disabled
+        aria-disabled="true"
+        className={COMING_SOON_CLASS}
+        title="Crop (sắp có)"
       >
         <Crop className="h-4 w-4" />
       </button>
 
       {/* 9. Sticky Note */}
       <button
-        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] transition"
-        title="Sticky Note / Comment Card"
+        disabled
+        aria-disabled="true"
+        className={COMING_SOON_CLASS}
+        title="Sticky Note / Comment Card (sắp có)"
       >
         <StickyNote className="h-4 w-4" />
       </button>
@@ -143,8 +158,10 @@ export const FloatingToolDock: React.FC<FloatingToolDockProps> = ({
 
       {/* 11. Comments */}
       <button
-        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] transition"
-        title="Comments (C)"
+        disabled
+        aria-disabled="true"
+        className={COMING_SOON_CLASS}
+        title="Comments (sắp có)"
       >
         <MessageCircle className="h-4 w-4" />
       </button>
@@ -159,17 +176,29 @@ export const FloatingToolDock: React.FC<FloatingToolDockProps> = ({
       </button>
 
       {/* 13. Image / Media */}
-      <button
-        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] transition"
-        title="Insert Media"
-      >
-        <ImageIcon className="h-4 w-4" />
-      </button>
+      <div className="relative">
+        <button
+          data-image-insert-trigger
+          onClick={() => setIsImageOpen((open) => !open)}
+          aria-expanded={isImageOpen}
+          className={`p-2 rounded-xl transition ${
+            isImageOpen
+              ? 'bg-[#252738] text-orange-400 shadow-sm'
+              : 'text-zinc-400 hover:text-zinc-200 hover:bg-[#202232]'
+          }`}
+          title="Insert Image"
+        >
+          <ImageIcon className="h-4 w-4" />
+        </button>
+        <ImageInsertPopover isOpen={isImageOpen} onClose={() => setIsImageOpen(false)} />
+      </div>
 
       {/* 14. More */}
       <button
-        className="p-2 rounded-xl text-zinc-400 hover:text-zinc-200 hover:bg-[#202232] transition"
-        title="More Tools"
+        disabled
+        aria-disabled="true"
+        className={COMING_SOON_CLASS}
+        title="More Tools (sắp có)"
       >
         <MoreHorizontal className="h-4 w-4" />
       </button>

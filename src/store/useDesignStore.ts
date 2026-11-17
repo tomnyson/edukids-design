@@ -1,9 +1,69 @@
 import { create } from 'zustand';
 import { PenDocument, PenNode, FrameNode } from '../types/pen-ast';
 import { generateNodeId, findNodeById, updateNodeInTree } from '../core/io/pen-file-handler';
+import {
+  DocTab,
+  HistorySnapshot,
+  Viewport,
+  DEFAULT_VIEWPORT,
+  createTab,
+  uniqueUntitledName,
+  snapshotActiveTab,
+  activateTab,
+  isPristine,
+} from './document-tabs';
+import { placeDesigns } from '../generator/design-generator';
+import {
+  CanvasTool,
+  PASTE_OFFSET,
+  appendToParent,
+  cloneWithNewIds,
+  findParentId,
+  topmostSelected,
+} from '../lib/canvas-editing';
+import {
+  Point,
+  WrapKind,
+  ZOrder,
+  arrangeAsFlex,
+  placeAt,
+  reorderInParent,
+  replaceNode,
+  unwrapFrames,
+  wrapNodes,
+} from '../lib/node-ops';
+import {
+  createInstance,
+  detachOrphans,
+  expandInstances,
+  findMaster,
+  instancesFit,
+  resolveInstance,
+  wouldNest,
+} from '../lib/components';
 
-export type ToolType = 'select' | 'frame' | 'rect' | 'text';
+export type ToolType = CanvasTool;
+
+/** Where a new instance goes: its top-left inside `parentId` (top level without one) */
+export interface InstancePlacement extends Point {
+  parentId?: string;
+}
+
+/** Copied node and the parent it came from, so a paste lands next to the original */
+export interface ClipboardEntry {
+  node: PenNode;
+  parentId: string | null;
+  /** `node` with its instances replaced by their content, pasted where those instances cannot go */
+  expanded?: PenNode;
+}
+
+/** The clipboard node to paste inside `parentId`: the expanded copy when its instances cannot go there */
+function pasteSource(entry: ClipboardEntry, docNodes: PenNode[], parentId: string | null): PenNode {
+  return entry.expanded && !instancesFit(entry.node, docNodes, parentId) ? entry.expanded : entry.node;
+}
 export type ReasoningEffort = 'minimal' | 'low' | 'medium' | 'high' | 'very_high';
+
+export type AppView = 'home' | 'editor';
 
 export interface ContextAttachment {
   id: string;
@@ -13,24 +73,23 @@ export interface ContextAttachment {
   content?: string;
 }
 
-interface HistorySnapshot {
-  document: PenDocument;
-}
-
 interface DesignState {
+  // Open documents (the active one is mirrored into the fields below)
+  tabs: DocTab[];
+  activeTabId: string;
+
   // Document state
   documentName: string;
   document: PenDocument;
   selectedNodeIds: string[];
   hoveredNodeId: string | null;
+  isDirty: boolean;
+  fileHandle: FileSystemFileHandle | null;
 
   // Viewport transformation
-  viewport: {
-    x: number;
-    y: number;
-    zoom: number;
-  };
+  viewport: Viewport;
   activeTool: ToolType;
+  clipboard: ClipboardEntry[];
 
   // Context Attachments & Parallel AI Engine
   contextAttachments: ContextAttachment[];
@@ -53,8 +112,21 @@ interface DesignState {
 
   // Actions
   createNewDocument: () => void;
+  /** Home screen or the editor (canvas, panels) for the active tab */
+  view: AppView;
+  showHome: () => void;
+  /** Opens a blank tab for a new design (reusing an untouched one) and returns its id */
+  startBlankDesign: () => string;
   setDocumentName: (name: string) => void;
-  loadDocument: (doc: PenDocument, name?: string) => void;
+  loadDocument: (doc: PenDocument, name?: string, fileHandle?: FileSystemFileHandle | null) => void;
+  switchTab: (id: string) => void;
+  closeTab: (id: string) => void;
+  markSaved: (
+    tabId: string,
+    name: string,
+    fileHandle: FileSystemFileHandle | null,
+    savedDocument: PenDocument
+  ) => void;
   selectNode: (id: string | null, multi?: boolean) => void;
   hoverNode: (id: string | null) => void;
   setViewport: (x: number, y: number, zoom?: number) => void;
@@ -65,9 +137,38 @@ interface DesignState {
   updateNode: (id: string, patch: Partial<PenNode>) => void;
   deleteSelectedNodes: () => void;
   moveNode: (id: string, dx: number, dy: number) => void;
+  /** Moves several nodes as one undo step */
+  moveNodes: (ids: string[], dx: number, dy: number) => void;
+  selectAll: () => void;
+  copySelection: () => void;
+  pasteClipboard: () => void;
+  duplicateSelection: () => void;
 
-  // Multi-variant generator
-  generateWebVariants: (topic: string) => void;
+  // Context menu actions; each is one undo step and a no-op when nothing applies
+  reorderSelection: (order: ZOrder) => void;
+  /** False when the selection is empty or spans different parents */
+  groupSelection: (kind: WrapKind) => boolean;
+  ungroupSelection: () => void;
+  addFlexLayout: () => void;
+  removeFlexLayout: () => void;
+  flipSelection: (axis: 'x' | 'y') => void;
+  /** Pastes the clipboard with its top-left at `point`, inside `parentId` (top level for null) */
+  pasteAt: (parentId: string | null, point: Point) => void;
+  /** Swaps the single selected node for the clipboard contents */
+  pasteToReplace: () => void;
+
+  // Components
+  /** Marks the selected frame as a master, or wraps the selection in a new master frame */
+  createComponent: () => void;
+  /** Adds an instance of `masterId` and selects it; null when the master is missing or would contain itself */
+  insertInstance: (masterId: string, placement: InstancePlacement) => string | null;
+  /** Replaces each selected instance with a plain copy of what it shows */
+  detachSelection: () => void;
+
+  // Text-to-design: appends AI output to the tab that requested it (false if it was closed)
+  appendGeneratedDesigns: (tabId: string, designs: FrameNode[], direction: 'row' | 'column') => boolean;
+  /** Appends frames that already carry their final position, as one undo step; false when the tab is gone */
+  appendPlacedFrames: (tabId: string, frames: FrameNode[]) => boolean;
 
   // Autonomous Advisor Co-pilot State
   isAutoAdvisorEnabled: boolean;
@@ -81,306 +182,6 @@ interface DesignState {
   // Undo/Redo
   undo: () => void;
   redo: () => void;
-}
-
-// Generate the Landing Page Artboards
-function createMultiVariantArtboards(
-  count: number = 6,
-  topic: string = 'In Ấn & Thiết Kế Thương Hiệu',
-  mode: 'split' | 'side-by-side' = 'side-by-side'
-): PenNode[] {
-  const allVariantTitles = [
-    '1. Neon Glass',
-    '2. Variant B — Blue x Modern',
-    '3. Variant C — Thanh Hải Pro',
-    '4. Variant D — In Nhanh Tech',
-    '5. Thanh Hải — Dark AI',
-    '6. Variant F — Modern Cyan',
-  ];
-
-  const splitTitles = [
-    '1. Hero & Navigation',
-    '2. Product Catalog',
-    '3. Workflow & Video',
-    '4. Testimonials & Social',
-    '5. Pricing & CTA',
-    '6. Footer & Legal',
-  ];
-
-  const titles = (mode === 'split' ? splitTitles : allVariantTitles).slice(0, Math.max(1, count));
-
-  const artboards: PenNode[] = [];
-  const startX = 350;
-  const startY = 80;
-  const artboardWidth = 240;
-  const artboardHeight = 1100;
-  const spacing = 40;
-
-  titles.forEach((title, idx) => {
-    const isDark = idx % 2 === 0;
-    const accentColor =
-      idx === 0
-        ? '#38bdf8'
-        : idx === 1
-        ? '#3b82f6'
-        : idx === 2
-        ? '#6366f1'
-        : idx === 3
-        ? '#8b5cf6'
-        : idx === 4
-        ? '#ec4899'
-        : '#06b6d4';
-
-    const frame: FrameNode = {
-      id: `variant-frame-${idx + 1}`,
-      type: 'frame',
-      name: title,
-      x: startX + idx * (artboardWidth + spacing),
-      y: startY,
-      width: artboardWidth,
-      height: artboardHeight,
-      fill: '#0f111a',
-      stroke: '#1e2130',
-      strokeWidth: 1,
-      cornerRadius: 12,
-      clip: true,
-      layout: 'flex',
-      flexDirection: 'column',
-      gap: 12,
-      padding: 12,
-      children: [
-        // Navbar
-        {
-          id: `nav-${idx}`,
-          type: 'frame',
-          name: 'Navbar',
-          x: 0,
-          y: 0,
-          width: 216,
-          height: 32,
-          fill: '#151724',
-          cornerRadius: 6,
-          layout: 'flex',
-          justifyContent: 'between',
-          alignItems: 'center',
-          padding: 8,
-          children: [
-            {
-              id: `logo-${idx}`,
-              type: 'text',
-              name: 'Brand Logo',
-              content: topic.toUpperCase().slice(0, 15) || 'THANH HẢI',
-              fontSize: 10,
-              fontWeight: '700',
-              fill: accentColor,
-            },
-            {
-              id: `menu-btn-${idx}`,
-              type: 'frame',
-              name: 'Action',
-              width: 44,
-              height: 20,
-              fill: accentColor,
-              cornerRadius: 4,
-              layout: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              children: [
-                {
-                  id: `btn-txt-${idx}`,
-                  type: 'text',
-                  content: 'Liên hệ',
-                  fontSize: 8,
-                  fill: '#ffffff',
-                },
-              ],
-            },
-          ],
-        },
-
-        // Hero Banner
-        {
-          id: `hero-${idx}`,
-          type: 'frame',
-          name: 'Hero Section',
-          x: 0,
-          y: 0,
-          width: 216,
-          height: 120,
-          fill: '#161929',
-          stroke: accentColor,
-          strokeWidth: 1,
-          cornerRadius: 8,
-          layout: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          gap: 6,
-          padding: 10,
-          children: [
-            {
-              id: `h-tag-${idx}`,
-              type: 'text',
-              name: 'Tagline',
-              content: 'IN NHANH CHẤT LƯỢNG CAO',
-              fontSize: 7,
-              fontWeight: '700',
-              fill: accentColor,
-            },
-            {
-              id: `h-title-${idx}`,
-              type: 'text',
-              name: 'Heading',
-              content: topic.slice(0, 24).toUpperCase() || 'IN ĐẸP DẤU GIÀY',
-              fontSize: 14,
-              fontWeight: '700',
-              fill: '#ffffff',
-              textAlign: 'center',
-            },
-            {
-              id: `h-sub-${idx}`,
-              type: 'text',
-              name: 'Subhead',
-              content: 'Công nghệ in chuyển nhiệt & offset 2026',
-              fontSize: 8,
-              fill: '#94a3b8',
-              textAlign: 'center',
-            },
-          ],
-        },
-
-        // Product Catalog Grid
-        {
-          id: `grid-${idx}`,
-          type: 'frame',
-          name: 'Sản Phẩm Nổi Bật',
-          x: 0,
-          y: 0,
-          width: 216,
-          height: 110,
-          fill: '#131522',
-          cornerRadius: 8,
-          layout: 'flex',
-          flexDirection: 'column',
-          gap: 8,
-          padding: 8,
-          children: [
-            {
-              id: `grid-title-${idx}`,
-              type: 'text',
-              content: 'Sản Phẩm Mới',
-              fontSize: 9,
-              fontWeight: '600',
-              fill: '#e2e8f0',
-            },
-            {
-              id: `cards-row-${idx}`,
-              type: 'frame',
-              name: 'Card Row',
-              x: 0,
-              y: 0,
-              width: 200,
-              height: 70,
-              layout: 'flex',
-              gap: 6,
-              children: [
-                {
-                  id: `card-1-${idx}`,
-                  type: 'frame',
-                  width: 97,
-                  height: 65,
-                  fill: '#1c1f30',
-                  cornerRadius: 6,
-                  padding: 4,
-                  children: [],
-                },
-                {
-                  id: `card-2-${idx}`,
-                  type: 'frame',
-                  width: 97,
-                  height: 65,
-                  fill: '#1c1f30',
-                  cornerRadius: 6,
-                  padding: 4,
-                  children: [],
-                },
-              ],
-            },
-          ],
-        },
-
-        // Video / Workflow Section
-        {
-          id: `process-${idx}`,
-          type: 'frame',
-          name: 'Quy Trình In Ấn',
-          x: 0,
-          y: 0,
-          width: 216,
-          height: 90,
-          fill: '#141624',
-          cornerRadius: 8,
-          padding: 8,
-          layout: 'flex',
-          flexDirection: 'column',
-          gap: 6,
-          children: [
-            {
-              id: `pr-title-${idx}`,
-              type: 'text',
-              content: 'Quy Trình 4 Bước',
-              fontSize: 9,
-              fontWeight: '600',
-              fill: '#cbd5e1',
-            },
-            {
-              id: `pr-box-${idx}`,
-              type: 'frame',
-              width: 200,
-              height: 55,
-              fill: '#0d0f1a',
-              cornerRadius: 6,
-              children: [],
-            },
-          ],
-        },
-
-        // Testimonial / Client section
-        {
-          id: `client-${idx}`,
-          type: 'frame',
-          name: 'Cảm Nhận Khách Hàng',
-          x: 0,
-          y: 0,
-          width: 216,
-          height: 120,
-          fill: '#121422',
-          cornerRadius: 8,
-          padding: 8,
-          children: [],
-        },
-
-        // Footer Section
-        {
-          id: `footer-${idx}`,
-          type: 'frame',
-          name: 'Footer',
-          x: 0,
-          y: 0,
-          width: 216,
-          height: 80,
-          fill: '#0a0b12',
-          cornerRadius: 6,
-          padding: 8,
-          children: [],
-        },
-      ],
-    };
-
-    artboards.push(frame);
-  });
-
-  return artboards;
 }
 
 export const BLANK_PEN_DOC: PenDocument = {
@@ -403,25 +204,37 @@ export const BLANK_PEN_DOC: PenDocument = {
 
 const DEFAULT_PEN_DOC: PenDocument = BLANK_PEN_DOC;
 
-function pushHistory(state: DesignState, newDoc: PenDocument) {
+/** Topmost selected nodes that are frames */
+function selectedFrames(state: DesignState): FrameNode[] {
+  const { document: doc, selectedNodeIds } = state;
+  return topmostSelected(doc.children, selectedNodeIds).flatMap((id) => {
+    const node = findNodeById(doc.children, id);
+    return node?.type === 'frame' ? [node] : [];
+  });
+}
+
+function pushHistory(state: DesignState, edited: PenDocument) {
+  // An edit that removed a master leaves its instances as plain copies, not blanks
+  const children = detachOrphans(state.document.children, edited.children, generateNodeId);
+  const newDoc = children === edited.children ? edited : { ...edited, children };
   const newHistory = state.history.slice(0, state.historyIndex + 1);
   newHistory.push({ document: JSON.parse(JSON.stringify(newDoc)) });
   return {
     document: newDoc,
     history: newHistory,
     historyIndex: newHistory.length - 1,
+    isDirty: true,
   };
 }
 
+const INITIAL_TAB = createTab(DEFAULT_PEN_DOC, 'untitled.pen');
+
 export const useDesignStore = create<DesignState>((set, get) => ({
-  documentName: 'untitled.pen',
-  document: BLANK_PEN_DOC,
-  selectedNodeIds: [],
-  hoveredNodeId: null,
-  viewport: { x: 40, y: 40, zoom: 1 },
+  tabs: [INITIAL_TAB],
+  ...activateTab(INITIAL_TAB),
+  view: 'home',
   activeTool: 'select',
-  history: [{ document: JSON.parse(JSON.stringify(BLANK_PEN_DOC)) }],
-  historyIndex: 0,
+  clipboard: [],
 
   // Context Attachments & Parallel AI Engine State
   contextAttachments: [],
@@ -517,41 +330,106 @@ export const useDesignStore = create<DesignState>((set, get) => ({
 
   setDocumentName: (name: string) => set({ documentName: name }),
 
+  showHome: () => set({ view: 'home' }),
+
+  startBlankDesign: () => {
+    if (isPristine(get())) {
+      set({ view: 'editor' });
+    } else {
+      // Unlike File > New, the context the user attached on Home belongs to this design
+      const { contextAttachments } = get();
+      get().createNewDocument();
+      set({ contextAttachments });
+    }
+    return get().activeTabId;
+  },
+
   createNewDocument: () => {
-    const blank = JSON.parse(JSON.stringify(BLANK_PEN_DOC));
+    const state = get();
+    const tabs = snapshotActiveTab(state.tabs, state);
+    const tab = createTab(BLANK_PEN_DOC, uniqueUntitledName(tabs.map((t) => t.name)));
     set({
-      documentName: 'untitled.pen',
-      document: blank,
-      selectedNodeIds: [],
-      hoveredNodeId: null,
+      tabs: [...tabs, tab],
+      ...activateTab(tab),
+      view: 'editor',
       contextAttachments: [],
-      viewport: { x: 40, y: 40, zoom: 1 },
-      history: [{ document: blank }],
-      historyIndex: 0,
-      toastMessage: '✨ Đã tạo tài liệu mới (Canvas trống, không có frame).',
+      toastMessage: `✨ Đã tạo tab mới ${tab.name} (Canvas trống, không có frame).`,
     });
     setTimeout(() => {
-      if (get().toastMessage?.includes('tài liệu mới')) {
+      if (get().toastMessage?.includes('tab mới')) {
         set({ toastMessage: null });
       }
     }, 2500);
   },
 
-  loadDocument: (doc, name) => {
+  loadDocument: (doc, name, fileHandle = null) => {
+    const state = get();
+    const tabs = snapshotActiveTab(state.tabs, state);
+    const tab = createTab(doc, name || uniqueUntitledName(tabs.map((t) => t.name)), fileHandle);
+    // Reuse an untouched empty tab rather than piling up blank ones
+    const nextTabs = isPristine(state)
+      ? tabs.map((t) => (t.id === state.activeTabId ? tab : t))
+      : [...tabs, tab];
     set({
-      documentName: name || 'untitled.pen',
-      document: doc,
-      selectedNodeIds: [],
-      hoveredNodeId: null,
-      history: [{ document: JSON.parse(JSON.stringify(doc)) }],
-      historyIndex: 0,
-      toastMessage: `📂 Đã mở tài liệu ${name || 'untitled.pen'}`,
+      tabs: nextTabs,
+      ...activateTab(tab),
+      view: 'editor',
+      toastMessage: `📂 Đã mở tài liệu ${tab.name}`,
     });
     setTimeout(() => {
       if (get().toastMessage?.includes('Đã mở')) {
         set({ toastMessage: null });
       }
     }, 2500);
+  },
+
+  switchTab: (id) => {
+    const state = get();
+    if (id === state.activeTabId) {
+      set({ view: 'editor' });
+      return;
+    }
+    const tabs = snapshotActiveTab(state.tabs, state);
+    const target = tabs.find((t) => t.id === id);
+    if (!target) return;
+    set({ tabs, ...activateTab(target), view: 'editor' });
+  },
+
+  closeTab: (id) => {
+    const state = get();
+    const tabs = snapshotActiveTab(state.tabs, state);
+    const index = tabs.findIndex((t) => t.id === id);
+    if (index === -1) return;
+    const remaining = tabs.filter((t) => t.id !== id);
+
+    if (remaining.length === 0) {
+      const blank = createTab(BLANK_PEN_DOC, 'untitled.pen');
+      set({ tabs: [blank], ...activateTab(blank) });
+      return;
+    }
+    if (id !== state.activeTabId) {
+      set({ tabs: remaining });
+      return;
+    }
+    const neighbour = remaining[Math.min(index, remaining.length - 1)];
+    set({ tabs: remaining, ...activateTab(neighbour) });
+  },
+
+  markSaved: (tabId, name, fileHandle, savedDocument) => {
+    // Saving is async: the user may have edited or switched tabs meanwhile
+    const state = get();
+    if (tabId === state.activeTabId) {
+      const patch = { documentName: name, fileHandle, isDirty: state.document !== savedDocument };
+      set({ ...patch, tabs: snapshotActiveTab(state.tabs, { ...state, ...patch }) });
+      return;
+    }
+    set({
+      tabs: state.tabs.map((t) =>
+        t.id === tabId
+          ? { ...t, name, fileHandle, isDirty: t.document !== savedDocument }
+          : t
+      ),
+    });
   },
 
   selectNode: (id, multi = false) => {
@@ -662,12 +540,212 @@ export const useDesignStore = create<DesignState>((set, get) => ({
     });
   },
 
-  generateWebVariants: (topic: string) => {
-    const { parallelAgentsCount, parallelMode } = get();
-    const count = Math.max(1, Math.min(6, parallelAgentsCount || 1));
-    const newArtboards = createMultiVariantArtboards(count, topic, parallelMode);
-    const newDoc = { ...get().document, children: newArtboards };
-    set(pushHistory(get(), newDoc));
+  moveNodes: (ids, dx, dy) => {
+    if (ids.length === 0 || (dx === 0 && dy === 0)) return;
+    const currentDoc = get().document;
+    // A node inside another moved node already travels with its parent
+    const children = topmostSelected(currentDoc.children, ids).reduce((nodes, id) => {
+      const node = findNodeById(nodes, id);
+      if (!node) return nodes;
+      return updateNodeInTree(nodes, id, {
+        x: Math.round((node.x || 0) + dx),
+        y: Math.round((node.y || 0) + dy),
+      });
+    }, currentDoc.children);
+    set(pushHistory(get(), { ...currentDoc, children }));
+  },
+
+  selectAll: () => set({ selectedNodeIds: get().document.children.map((n) => n.id) }),
+
+  copySelection: () => {
+    const { document: doc, selectedNodeIds } = get();
+    const entries = topmostSelected(doc.children, selectedNodeIds).flatMap((id) => {
+      const node = findNodeById(doc.children, id);
+      if (!node) return [];
+      const [expanded] = expandInstances([node], doc.children);
+      return [{ node, parentId: findParentId(doc.children, id) ?? null, expanded }];
+    });
+    if (entries.length > 0) set({ clipboard: entries });
+  },
+
+  pasteClipboard: () => {
+    const { clipboard, document: doc } = get();
+    if (clipboard.length === 0) return;
+    // Each paste lands one offset further, so repeated pastes do not stack exactly
+    const shift = (node: PenNode) =>
+      ({ ...node, x: (node.x || 0) + PASTE_OFFSET, y: (node.y || 0) + PASTE_OFFSET }) as PenNode;
+    const shifted = clipboard.map((entry) => ({
+      ...entry,
+      node: shift(entry.node),
+      expanded: entry.expanded && shift(entry.expanded),
+    }));
+    const pasted = shifted.map((entry) => {
+      const parentId = entry.parentId && findNodeById(doc.children, entry.parentId) ? entry.parentId : null;
+      return { parentId, node: cloneWithNewIds(pasteSource(entry, doc.children, parentId), generateNodeId) };
+    });
+    const children = pasted.reduce((nodes, entry) => appendToParent(nodes, entry.parentId, entry.node), doc.children);
+    set(pushHistory(get(), { ...doc, children }));
+    set({ clipboard: shifted, selectedNodeIds: pasted.map((entry) => entry.node.id) });
+  },
+
+  duplicateSelection: () => {
+    const { document: doc, selectedNodeIds } = get();
+    const copies = topmostSelected(doc.children, selectedNodeIds).flatMap((id) => {
+      const node = findNodeById(doc.children, id);
+      if (!node) return [];
+      const moved = { ...node, x: (node.x || 0) + PASTE_OFFSET, y: (node.y || 0) + PASTE_OFFSET } as PenNode;
+      return [{ parentId: findParentId(doc.children, id) ?? null, node: cloneWithNewIds(moved, generateNodeId) }];
+    });
+    if (copies.length === 0) return;
+    const children = copies.reduce((nodes, entry) => appendToParent(nodes, entry.parentId, entry.node), doc.children);
+    set(pushHistory(get(), { ...doc, children }));
+    set({ selectedNodeIds: copies.map((entry) => entry.node.id) });
+  },
+
+  reorderSelection: (order) => {
+    const { document: doc, selectedNodeIds } = get();
+    const ids = topmostSelected(doc.children, selectedNodeIds);
+    if (ids.length === 0) return;
+    set(pushHistory(get(), { ...doc, children: reorderInParent(doc.children, ids, order) }));
+  },
+
+  groupSelection: (kind) => {
+    const { document: doc, selectedNodeIds } = get();
+    const wrapperId = generateNodeId();
+    const children = wrapNodes(doc.children, topmostSelected(doc.children, selectedNodeIds), kind, wrapperId);
+    if (!children) return false;
+    set(pushHistory(get(), { ...doc, children }));
+    set({ selectedNodeIds: [wrapperId] });
+    return true;
+  },
+
+  ungroupSelection: () => {
+    const { document: doc, selectedNodeIds } = get();
+    const { nodes, liftedIds } = unwrapFrames(doc.children, topmostSelected(doc.children, selectedNodeIds));
+    if (liftedIds.length === 0) return;
+    set(pushHistory(get(), { ...doc, children: nodes }));
+    set({ selectedNodeIds: liftedIds });
+  },
+
+  addFlexLayout: () => {
+    const { document: doc } = get();
+    const frames = selectedFrames(get()).filter((f) => f.children.length > 0 && f.layout !== 'flex');
+    if (frames.length === 0) return;
+    const children = frames.reduce((nodes, frame) => updateNodeInTree(nodes, frame.id, arrangeAsFlex(frame)), doc.children);
+    set(pushHistory(get(), { ...doc, children }));
+  },
+
+  removeFlexLayout: () => {
+    const { document: doc } = get();
+    // Children already sit where flex put them (addFlexLayout bakes positions), so they stay put
+    const frames = selectedFrames(get()).filter((f) => f.layout === 'flex');
+    if (frames.length === 0) return;
+    const children = frames.reduce((nodes, frame) => updateNodeInTree(nodes, frame.id, { layout: 'none' }), doc.children);
+    set(pushHistory(get(), { ...doc, children }));
+  },
+
+  flipSelection: (axis) => {
+    const { document: doc, selectedNodeIds } = get();
+    const field = axis === 'x' ? 'flipX' : 'flipY';
+    const nodes = topmostSelected(doc.children, selectedNodeIds).flatMap((id) => findNodeById(doc.children, id) ?? []);
+    if (nodes.length === 0) return;
+    const children = nodes.reduce((tree, node) => updateNodeInTree(tree, node.id, { [field]: !node[field] }), doc.children);
+    set(pushHistory(get(), { ...doc, children }));
+  },
+
+  pasteAt: (parentId, point) => {
+    const { clipboard, document: doc } = get();
+    if (clipboard.length === 0) return;
+    // A parent that is gone (or cannot hold children) falls back to the top level
+    const parent = parentId ? findNodeById(doc.children, parentId) : null;
+    const target = parent && 'children' in parent && parent.children ? parent.id : null;
+    const pasted = placeAt(
+      clipboard.map((entry) => cloneWithNewIds(pasteSource(entry, doc.children, target), generateNodeId)),
+      point
+    );
+    const children = pasted.reduce((nodes, node) => appendToParent(nodes, target, node), doc.children);
+    set(pushHistory(get(), { ...doc, children }));
+    set({ selectedNodeIds: pasted.map((node) => node.id) });
+  },
+
+  pasteToReplace: () => {
+    const { clipboard, document: doc, selectedNodeIds } = get();
+    const targets = topmostSelected(doc.children, selectedNodeIds);
+    if (clipboard.length === 0 || targets.length !== 1) return;
+    const parentId = findParentId(doc.children, targets[0]) ?? null;
+    const replacements = clipboard.map((entry) =>
+      cloneWithNewIds(pasteSource(entry, doc.children, parentId), generateNodeId)
+    );
+    const children = replaceNode(doc.children, targets[0], replacements);
+    if (!children) return;
+    set(pushHistory(get(), { ...doc, children }));
+    set({ selectedNodeIds: replacements.map((node) => node.id) });
+  },
+
+  createComponent: () => {
+    const { document: doc, selectedNodeIds } = get();
+    const ids = topmostSelected(doc.children, selectedNodeIds);
+    if (ids.length === 0) return;
+    const single = ids.length === 1 ? findNodeById(doc.children, ids[0]) : undefined;
+    if (single?.type === 'frame') {
+      if (single.reusable) return;
+      set(pushHistory(get(), { ...doc, children: updateNodeInTree(doc.children, single.id, { reusable: true }) }));
+      return;
+    }
+    const wrapperId = generateNodeId();
+    const wrapped = wrapNodes(doc.children, ids, 'frame', wrapperId);
+    if (!wrapped) return;
+    const children = updateNodeInTree(wrapped, wrapperId, { reusable: true, name: 'Component' });
+    set(pushHistory(get(), { ...doc, children }));
+    set({ selectedNodeIds: [wrapperId] });
+  },
+
+  insertInstance: (masterId, { parentId, x, y }) => {
+    const { document: doc } = get();
+    const master = findMaster(doc.children, masterId);
+    if (!master || wouldNest(doc.children, masterId, parentId ?? null)) return null;
+    const node = createInstance(master, generateNodeId(), { x, y });
+    const parent = parentId ? findNodeById(doc.children, parentId) : null;
+    const target = parent && 'children' in parent && parent.children ? parent.id : null;
+    set(pushHistory(get(), { ...doc, children: appendToParent(doc.children, target, node) }));
+    set({ selectedNodeIds: [node.id] });
+    return node.id;
+  },
+
+  detachSelection: () => {
+    const { document: doc, selectedNodeIds } = get();
+    const children = topmostSelected(doc.children, selectedNodeIds).reduce((nodes, id) => {
+      const node = findNodeById(nodes, id);
+      const resolved = node?.type === 'component' ? resolveInstance(node, doc.children) : null;
+      if (!resolved) return nodes;
+      const copy = { ...cloneWithNewIds(resolved, generateNodeId), id } as PenNode;
+      return replaceNode(nodes, id, [copy]) ?? nodes;
+    }, doc.children);
+    if (children === doc.children) return;
+    set(pushHistory(get(), { ...doc, children }));
+  },
+
+  appendGeneratedDesigns: (tabId, designs, direction) => {
+    const state = get();
+    const target = tabId === state.activeTabId ? state.document : state.tabs.find((t) => t.id === tabId)?.document;
+    if (!target) return false;
+    return get().appendPlacedFrames(tabId, placeDesigns(designs, target.children, direction));
+  },
+
+  appendPlacedFrames: (tabId, frames) => {
+    // Generation is async: the user may have switched tabs while it ran
+    const state = get();
+    const appendTo = (doc: PenDocument): PenDocument => ({ ...doc, children: [...doc.children, ...frames] });
+
+    if (tabId === state.activeTabId) {
+      set(pushHistory(state, appendTo(state.document)));
+      return true;
+    }
+    const tab = state.tabs.find((t) => t.id === tabId);
+    if (!tab) return false;
+    const updated = pushHistory({ ...state, ...activateTab(tab) }, appendTo(tab.document));
+    set({ tabs: state.tabs.map((t) => (t.id === tabId ? { ...t, ...updated } : t)) });
+    return true;
   },
 
   undo: () => {
@@ -677,6 +755,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       set({
         document: JSON.parse(JSON.stringify(prev.document)),
         historyIndex: historyIndex - 1,
+        isDirty: true,
       });
     }
   },
@@ -688,6 +767,7 @@ export const useDesignStore = create<DesignState>((set, get) => ({
       set({
         document: JSON.parse(JSON.stringify(next.document)),
         historyIndex: historyIndex + 1,
+        isDirty: true,
       });
     }
   },

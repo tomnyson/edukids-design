@@ -1,5 +1,5 @@
 import React from 'react';
-import { Zap, Lock } from 'lucide-react';
+import { Zap } from 'lucide-react';
 import { useDesignStore } from '../../store/useDesignStore';
 
 interface ParallelAgentsPopoverProps {
@@ -37,19 +37,12 @@ export const ParallelAgentsPopover: React.FC<ParallelAgentsPopoverProps> = ({ is
                     ? 'bg-[#372f1b] text-amber-400 border border-amber-500/40 shadow-sm'
                     : 'bg-[#1b1c2b] text-zinc-400 hover:text-zinc-200 hover:bg-[#222438] border border-dashed border-[#2f3248]'
                 }`}
-                title={n > 1 ? `Unlock & run ${n} parallel agents` : '1 single agent'}
+                title={n > 1 ? `Run ${n} parallel agents` : '1 single agent'}
               >
-                {isSelected || n === 1 ? (
-                  <span className="flex items-center gap-0.5">
-                    <Zap className="h-3 w-3 fill-current text-amber-400" />
-                    {n}x
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-0.5 text-zinc-500">
-                    <Lock className="h-2.5 w-2.5 text-zinc-500" />
-                    {n}x
-                  </span>
-                )}
+                <span className="flex items-center gap-0.5">
+                  <Zap className={`h-3 w-3 fill-current ${isSelected ? 'text-amber-400' : 'text-amber-400/50'}`} />
+                  {n}x
+                </span>
               </button>
             );
           })}

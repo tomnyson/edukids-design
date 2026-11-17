@@ -1,20 +1,27 @@
 import React from 'react';
 import {
-  FileText,
-  Plus,
   Share2,
   Gift,
   Play,
   Globe,
 } from 'lucide-react';
+import { DocumentTabBar } from './DocumentTabBar';
+import { FileMenu } from './FileMenu';
+import { FileActions } from '../../hooks/useFileActions';
+import { BrandLogo } from '../brand/BrandLogo';
+import { TitleBarLead } from './TitleBarLead';
+import { BRAND, isDesktopApp } from '../../lib/brand';
+
+/** Desktop app: the bar drags the window, and its controls must opt out to stay clickable */
+const DRAG_REGION = { WebkitAppRegion: 'drag' } as React.CSSProperties;
+const NO_DRAG_REGION = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
 
 interface WindowChromeProps {
   onPlayPreview: () => void;
   onImportWeb: () => void;
   onShare: () => void;
   onConnectAgents?: () => void;
-  onNewDocument?: () => void;
-  documentName?: string;
+  fileActions: FileActions;
 }
 
 export const WindowChrome: React.FC<WindowChromeProps> = ({
@@ -22,46 +29,36 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
   onImportWeb,
   onShare,
   onConnectAgents,
-  onNewDocument,
-  documentName = 'untitled.pen',
+  fileActions,
 }) => {
+  const desktop = isDesktopApp();
+  const controlStyle = desktop ? NO_DRAG_REGION : undefined;
+
   return (
-    <header className="flex h-11 w-full items-center justify-between border-b border-[#232533] bg-[#0c0d12] px-3.5 select-none z-30">
-      {/* Left: macOS Window Controls & Tabs */}
-      <div className="flex items-center gap-3">
-        {/* macOS Traffic Lights */}
-        <div className="flex items-center gap-2 pr-1">
-          <div className="h-3 w-3 rounded-full bg-[#ff5f56] hover:opacity-80 transition cursor-pointer" />
-          <div className="h-3 w-3 rounded-full bg-[#ffbd2e] hover:opacity-80 transition cursor-pointer" />
-          <div className="h-3 w-3 rounded-full bg-[#27c93f] hover:opacity-80 transition cursor-pointer" />
-        </div>
+    <header
+      className="flex h-11 w-full items-center justify-between border-b border-[#232533] bg-[#0c0d12] px-3.5 select-none z-30"
+      style={desktop ? DRAG_REGION : undefined}
+    >
+      {/* Left: window buttons, brand & tabs */}
+      <div className="flex min-w-0 items-center gap-3">
+        <TitleBarLead desktop={desktop} />
 
         {/* Brand Icon & Name */}
         <div className="flex items-center gap-1.5 pl-1 pr-2 text-zinc-300">
-          <div className="flex h-5 w-5 items-center justify-center rounded bg-gradient-to-br from-orange-500 to-amber-600 text-white font-bold text-[10px]">
-            P
-          </div>
-          <span className="text-xs font-semibold tracking-tight text-zinc-200">pen.dev</span>
+          <BrandLogo size={20} />
+          <span className="text-xs font-semibold tracking-tight text-zinc-200 whitespace-nowrap">{BRAND.name}</span>
         </div>
 
-        {/* Tab Bar */}
-        <div className="flex items-center gap-1">
-          <div className="flex items-center gap-2 bg-[#1b1c26] text-zinc-200 px-3 py-1 rounded-md text-xs border border-[#2b2d3d] shadow-sm">
-            <FileText className="h-3.5 w-3.5 text-zinc-400" />
-            <span className="font-mono text-[11px]">{documentName}</span>
-          </div>
-          <button
-            onClick={onNewDocument}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-[#1b1c26] transition cursor-pointer"
-            title="New Blank Document (Cmd+N)"
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
+        <div className="flex min-w-0 items-center gap-3" style={controlStyle}>
+          <FileMenu actions={fileActions} />
+
+          {/* Document Tabs */}
+          <DocumentTabBar onNewDocument={fileActions.newDocument} onCloseTab={fileActions.closeTab} />
         </div>
       </div>
 
       {/* Right: Actions, Avatar & Free Badge */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5" style={controlStyle}>
         {/* Share Button */}
         <button
           onClick={onShare}
@@ -73,8 +70,10 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
 
         {/* Gift Button */}
         <button
-          className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-200 hover:bg-[#161720] transition"
-          title="Rewards & Referral"
+          disabled
+          aria-disabled="true"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-600 opacity-50 cursor-not-allowed"
+          title="Rewards & Referral (sắp có)"
         >
           <Gift className="h-3.5 w-3.5" />
         </button>
@@ -113,7 +112,7 @@ export const WindowChrome: React.FC<WindowChromeProps> = ({
         )}
 
         {/* User Avatar */}
-        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-700 cursor-pointer">
+        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-zinc-800 text-zinc-300 text-xs font-semibold border border-zinc-700">
           T
         </div>
 

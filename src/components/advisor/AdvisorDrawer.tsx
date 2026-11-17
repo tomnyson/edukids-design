@@ -21,9 +21,11 @@ import { findNodeById } from '../../core/io/pen-file-handler';
 interface AdvisorDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Opens straight to the API key form (e.g. text-to-design found no key) */
+  showKeySetup?: boolean;
 }
 
-export const AdvisorDrawer: React.FC<AdvisorDrawerProps> = ({ isOpen, onClose }) => {
+export const AdvisorDrawer: React.FC<AdvisorDrawerProps> = ({ isOpen, onClose, showKeySetup = false }) => {
   const {
     document: doc,
     selectedNodeIds,
@@ -45,6 +47,10 @@ export const AdvisorDrawer: React.FC<AdvisorDrawerProps> = ({ isOpen, onClose })
   const [showKeyModal, setShowKeyModal] = useState(false);
 
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (isOpen && showKeySetup) setShowKeyModal(true);
+  }, [isOpen, showKeySetup]);
   const advisor = new ClaudeOpusAdvisor();
   const selectedNode =
     selectedNodeIds.length > 0 ? findNodeById(doc.children, selectedNodeIds[0]) : null;

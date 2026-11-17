@@ -2,13 +2,15 @@ import { z } from 'zod';
 
 export const BaseNodeSchema = z.object({
   id: z.string(),
-  type: z.enum(['frame', 'text', 'rect', 'ellipse', 'path', 'component', 'browser']),
+  type: z.enum(['frame', 'text', 'rect', 'ellipse', 'path', 'image', 'component', 'browser']),
   name: z.string().optional(),
   x: z.number().default(0),
   y: z.number().default(0),
   width: z.number().default(0),
   height: z.number().default(0),
   rotation: z.number().optional(),
+  flipX: z.boolean().optional(),
+  flipY: z.boolean().optional(),
   fill: z.string().optional(),
   stroke: z.string().optional(),
   strokeWidth: z.number().optional(),
@@ -23,6 +25,7 @@ export const BaseNodeSchema = z.object({
 export const PenNodeSchema: z.ZodType<any> = BaseNodeSchema.extend({
   // Frame properties
   clip: z.boolean().optional(),
+  reusable: z.boolean().optional(),
   layout: z.enum(['none', 'flex', 'grid']).optional(),
   flexDirection: z.enum(['row', 'column']).optional(),
   gap: z.number().optional(),
@@ -43,6 +46,11 @@ export const PenNodeSchema: z.ZodType<any> = BaseNodeSchema.extend({
 
   // Path properties
   geometry: z.string().optional(),
+
+  // Image properties
+  src: z.string().optional(),
+  fit: z.enum(['cover', 'contain', 'fill']).optional(),
+  alt: z.string().optional(),
 
   // Component properties
   componentId: z.string().optional(),

@@ -1,139 +1,172 @@
-import React, { useState } from 'react';
-import { X, ExternalLink, Monitor, Smartphone, Tablet } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { X, ExternalLink, Monitor, Smartphone, Tablet, Maximize2 } from 'lucide-react';
 import { useDesignStore } from '../../store/useDesignStore';
-import { findNodeById } from '../../core/io/pen-file-handler';
-import { FrameNode } from '../../types/pen-ast';
+import { buildHtmlDocument, findTopLevelId } from '../../compiler/ast-to-html';
+import { expandInstances } from '../../lib/components';
 
 interface PreviewModalProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+type Device = 'actual' | 'desktop' | 'tablet' | 'mobile';
+
+const DEVICES: { id: Device; label: string; width: number | null; icon: React.ReactNode }[] = [
+  { id: 'actual', label: 'Kích thước thật', width: null, icon: <Maximize2 className="h-4 w-4" /> },
+  { id: 'desktop', label: 'Desktop (1024px)', width: 1024, icon: <Monitor className="h-4 w-4" /> },
+  { id: 'tablet', label: 'Tablet (768px)', width: 768, icon: <Tablet className="h-4 w-4" /> },
+  { id: 'mobile', label: 'Mobile (375px)', width: 375, icon: <Smartphone className="h-4 w-4" /> },
+];
+
+/** Opens the compiled page in a new tab; the HTML has no scripts, so a blob URL is safe */
+function openInNewTab(html: string): void {
+  const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+  window.open(url, '_blank', 'noopener');
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, onClose }) => {
   const { document: doc, selectedNodeIds } = useDesignStore();
-  const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
+  const [device, setDevice] = useState<Device>('actual');
+  const [pickedId, setPickedId] = useState<string | null>(null);
+
+  const frames = doc.children.filter((n) => n.visible !== false);
+  const selectedTopId = selectedNodeIds.length > 0 ? findTopLevelId(doc.children, selectedNodeIds[0]) : null;
+
+  // Each time the preview opens, start from the frame the user is working on
+  useEffect(() => {
+    if (isOpen) setPickedId(selectedTopId);
+  }, [isOpen]);
+
+  const target = frames.find((n) => n.id === pickedId) ?? frames[0] ?? null;
+  const html = useMemo(() => {
+    const [expanded] = target ? expandInstances([target], doc.children) : [];
+    return expanded ? buildHtmlDocument(expanded) : '';
+  }, [target, doc.children]);
+
+  // onClose is an inline arrow in App: reading it through a ref keeps the
+  // listener attached across re-renders, otherwise a re-render triggered by an
+  // earlier keydown listener detaches it mid-dispatch and Escape is lost
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!isOpen) return;
+    // Capture phase, so canvas shortcuts behind the modal (deselect, delete) never see these keys
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onCloseRef.current();
+      } else if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
-  const targetNode =
-    selectedNodeIds.length > 0
-      ? (findNodeById(doc.children, selectedNodeIds[0]) as FrameNode) || doc.children[0]
-      : (doc.children[0] as FrameNode);
-
-  const deviceWidths = {
-    desktop: 'w-[1024px]',
-    tablet: 'w-[768px]',
-    mobile: 'w-[375px]',
-  };
+  const designWidth = Math.max(1, target?.width ?? 1);
+  const designHeight = Math.max(1, target?.height ?? 1);
+  const viewportWidth = DEVICES.find((d) => d.id === device)?.width ?? designWidth;
+  const scale = viewportWidth / designWidth;
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-[#08090d]/95 backdrop-blur-xl text-zinc-100 select-none">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Preview"
+      className="fixed inset-0 z-50 flex flex-col bg-[#08090d]/95 backdrop-blur-xl text-zinc-100 select-none"
+    >
       {/* Top Preview Bar */}
-      <div className="flex h-12 w-full items-center justify-between border-b border-[#202231] px-4 bg-[#101119]">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-zinc-300">Prototype Preview:</span>
-          <span className="font-mono text-xs text-orange-400 bg-orange-950/40 border border-orange-800/40 px-2 py-0.5 rounded">
-            {targetNode?.name || 'Interactive View'}
-          </span>
+      <div className="flex h-12 w-full items-center justify-between gap-4 border-b border-[#202231] px-4 bg-[#101119]">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-xs font-semibold text-zinc-300">Preview:</span>
+          {frames.length > 1 ? (
+            <select
+              value={target?.id ?? ''}
+              onChange={(e) => setPickedId(e.target.value)}
+              className="max-w-[260px] truncate font-mono text-xs text-orange-400 bg-orange-950/40 border border-orange-800/40 px-2 py-0.5 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-orange-500"
+            >
+              {frames.map((frame) => (
+                <option key={frame.id} value={frame.id} className="bg-[#14151d] text-zinc-200">
+                  {frame.name || frame.type}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="truncate font-mono text-xs text-orange-400 bg-orange-950/40 border border-orange-800/40 px-2 py-0.5 rounded">
+              {target?.name || 'Canvas trống'}
+            </span>
+          )}
+          {target && (
+            <span className="font-mono text-[11px] text-zinc-500">
+              {designWidth}×{designHeight}
+              {scale !== 1 && ` · ${Math.round(scale * 100)}%`}
+            </span>
+          )}
         </div>
 
         {/* Device Switcher */}
         <div className="flex items-center gap-1 bg-[#181a26] border border-[#27293a] p-1 rounded-lg">
-          <button
-            onClick={() => setDevice('desktop')}
-            className={`p-1.5 rounded transition ${
-              device === 'desktop' ? 'bg-[#25283b] text-white shadow' : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-            title="Desktop (1024px)"
-          >
-            <Monitor className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setDevice('tablet')}
-            className={`p-1.5 rounded transition ${
-              device === 'tablet' ? 'bg-[#25283b] text-white shadow' : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-            title="Tablet (768px)"
-          >
-            <Tablet className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setDevice('mobile')}
-            className={`p-1.5 rounded transition ${
-              device === 'mobile' ? 'bg-[#25283b] text-white shadow' : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-            title="Mobile (375px)"
-          >
-            <Smartphone className="h-4 w-4" />
-          </button>
+          {DEVICES.map((d) => (
+            <button
+              key={d.id}
+              onClick={() => setDevice(d.id)}
+              aria-pressed={device === d.id}
+              className={`p-1.5 rounded transition ${
+                device === d.id ? 'bg-[#25283b] text-white shadow' : 'text-zinc-500 hover:text-zinc-300'
+              }`}
+              title={d.label}
+            >
+              {d.icon}
+            </button>
+          ))}
         </div>
 
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => openInNewTab(html)}
+            disabled={!target}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-40 disabled:pointer-events-none transition"
+            title="Mở trong tab mới"
+          >
+            <ExternalLink className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+            title="Đóng (Esc)"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
-      {/* Simulated Device Frame Viewport */}
+      {/* Viewport: the design is laid out at its own size, then scaled to the device width */}
       <div className="flex-1 overflow-auto flex items-start justify-center p-8 bg-[#0a0b10]">
-        <div
-          className={`${deviceWidths[device]} min-h-[600px] bg-[#0f111a] border border-[#232638] rounded-xl shadow-2xl p-6 transition-all duration-300 space-y-6`}
-        >
-          {/* Mock Interactive Render */}
-          <div className="flex items-center justify-between pb-4 border-b border-zinc-800/80">
-            <span className="font-bold text-lg text-sky-400">THANH HẢI PRO</span>
-            <div className="flex gap-4 text-xs text-zinc-400">
-              <span className="hover:text-white cursor-pointer">Sản phẩm</span>
-              <span className="hover:text-white cursor-pointer">Quy trình</span>
-              <span className="hover:text-white cursor-pointer">Báo giá</span>
-            </div>
-            <button className="bg-sky-500 hover:bg-sky-400 text-white font-medium text-xs px-3 py-1.5 rounded-lg transition">
-              Liên Hệ Ngay
-            </button>
+        {target ? (
+          <div
+            className="flex-shrink-0 overflow-hidden rounded-xl border border-[#232638] shadow-2xl"
+            style={{ width: viewportWidth, height: designHeight * scale }}
+          >
+            <iframe
+              title={`Preview ${target.name || ''}`}
+              srcDoc={html}
+              sandbox=""
+              style={{
+                width: designWidth,
+                height: designHeight,
+                border: 0,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+              }}
+            />
           </div>
-
-          <div className="text-center py-12 space-y-4">
-            <span className="text-[11px] font-mono font-bold tracking-widest text-sky-400 uppercase bg-sky-950/40 border border-sky-800/40 px-3 py-1 rounded-full">
-              CÔNG NGHỆ IN ẤN CHẤT LƯỢNG CAO
-            </span>
-            <h1 className="text-3xl font-extrabold text-white tracking-tight">
-              IN ĐẸP DẤU GIÀY & TEM NHÃN CAO CẤP
-            </h1>
-            <p className="text-zinc-400 text-sm max-w-md mx-auto">
-              Giải pháp in chuyển nhiệt, in lưới và gia công nhãn mác công nghiệp tiêu chuẩn ISO.
-            </p>
-            <div className="pt-2 flex justify-center gap-3">
-              <button className="bg-gradient-to-r from-sky-500 to-blue-600 text-white font-medium text-xs px-5 py-2.5 rounded-lg shadow-lg hover:opacity-95 transition">
-                Nhận Báo Giá Nhanh
-              </button>
-              <button className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs px-5 py-2.5 rounded-lg border border-zinc-700 transition">
-                Xem Mẫu In
-              </button>
-            </div>
-          </div>
-
-          {/* Cards Grid */}
-          <div className="grid grid-cols-3 gap-4 pt-4">
-            <div className="bg-[#161928] border border-[#23273d] p-4 rounded-xl space-y-2">
-              <div className="h-28 bg-[#10121d] rounded-lg border border-zinc-800/60" />
-              <h3 className="font-bold text-xs text-zinc-200">Tem Nhãn May Mặc</h3>
-              <p className="text-[11px] text-zinc-400">Độ bền màu cao, không bong tróc.</p>
-            </div>
-            <div className="bg-[#161928] border border-[#23273d] p-4 rounded-xl space-y-2">
-              <div className="h-28 bg-[#10121d] rounded-lg border border-zinc-800/60" />
-              <h3 className="font-bold text-xs text-zinc-200">Decal & Bao Bì</h3>
-              <p className="text-[11px] text-zinc-400">Chống nước, keo dính chuyên dụng.</p>
-            </div>
-            <div className="bg-[#161928] border border-[#23273d] p-4 rounded-xl space-y-2">
-              <div className="h-28 bg-[#10121d] rounded-lg border border-zinc-800/60" />
-              <h3 className="font-bold text-xs text-zinc-200">Hộp Giấy & Thùng Carton</h3>
-              <p className="text-[11px] text-zinc-400">In offset sắc nét, chuẩn thương hiệu.</p>
-            </div>
-          </div>
-        </div>
+        ) : (
+          <p className="mt-24 text-sm text-zinc-500">Canvas trống. Hãy tạo hoặc mở một thiết kế trước.</p>
+        )}
       </div>
     </div>
   );

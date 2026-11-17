@@ -7,7 +7,7 @@ const HOME = os.homedir();
 const CURRENT_DIR = process.cwd();
 const MCP_SCRIPT_PATH = path.resolve(CURRENT_DIR, 'bin/pen-mcp.js');
 
-console.log('=== Pen Studio 1-Click MCP Setup for Coding Agents ===\n');
+console.log('=== EduKids Design 1-Click MCP Setup for Coding Agents ===\n');
 console.log(`Executable target: ${MCP_SCRIPT_PATH}\n`);
 
 // 1. Setup Antigravity CLI (~/.gemini/antigravity-cli/mcp.json or mcp folder)
@@ -22,7 +22,7 @@ try {
       agyConfig = JSON.parse(fs.readFileSync(AGY_CONFIG_PATH, 'utf-8'));
     } catch {}
   }
-  agyConfig['pen-studio'] = {
+  agyConfig['edukids-design'] = {
     command: 'node',
     args: [MCP_SCRIPT_PATH],
   };
@@ -45,7 +45,7 @@ try {
     } catch {}
   }
   if (!ocConfig.mcpServers) ocConfig.mcpServers = {};
-  ocConfig.mcpServers['pen-studio'] = {
+  ocConfig.mcpServers['edukids-design'] = {
     command: 'node',
     args: [MCP_SCRIPT_PATH],
   };
@@ -63,7 +63,7 @@ try {
   fs.mkdirSync(LOCAL_CURSOR_DIR, { recursive: true });
   const cursorConfig = {
     mcpServers: {
-      'pen-studio': {
+      'edukids-design': {
         command: 'node',
         args: [MCP_SCRIPT_PATH],
       },
